@@ -53,7 +53,7 @@ jobs:
           echo ""
 
           echo "Python files:"
-          find . -maxdepth 2 -name "*.py" -print
+          find . -maxdepth 3 -name "*.py" -print
 
       # ======================================================
       # 5. OPTION FLOW SCANNER V1 실행
@@ -81,7 +81,6 @@ jobs:
 
       - name: Check result CSV
         run: |
-
           echo "=========================================="
           echo "CHECK RESULT CSV"
           echo "=========================================="
@@ -117,3 +116,36 @@ jobs:
             exit 1
 
           fi
+
+      # ======================================================
+      # 7. TELEGRAM V1 결과 전송
+      # ======================================================
+
+      - name: Send V1 result to Telegram
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          PYTHONIOENCODING: utf-8
+        run: |
+
+          echo "=========================================="
+          echo "TELEGRAM V1 RESULT SENDER"
+          echo "=========================================="
+
+          if [ -z "$TELEGRAM_BOT_TOKEN" ]; then
+            echo "❌ TELEGRAM_BOT_TOKEN이 GitHub Secrets에 없습니다."
+            exit 1
+          fi
+
+          if [ -z "$TELEGRAM_CHAT_ID" ]; then
+            echo "❌ TELEGRAM_CHAT_ID가 GitHub Secrets에 없습니다."
+            exit 1
+          fi
+
+          python telegram_sender_v1.py
+
+          echo ""
+
+          echo "=========================================="
+          echo "TELEGRAM V1 SEND FINISHED"
+          echo "=========================================="
