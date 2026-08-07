@@ -7,7 +7,7 @@ import pandas as pd
 # ============================================================
 
 BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
-CHAT_ID = "7729872113"
+CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
 RESULT_FILE = os.path.join(
     "03_RESULTS",
