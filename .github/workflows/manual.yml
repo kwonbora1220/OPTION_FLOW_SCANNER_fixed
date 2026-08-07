@@ -8,29 +8,112 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+
+      # ======================================================
+      # 1. GitHub 저장소 가져오기
+      # ======================================================
+
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      # ======================================================
+      # 2. Python 설치
+      # ======================================================
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
+      # ======================================================
+      # 3. 필요한 Python 패키지 설치
+      # ======================================================
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install pandas requests yfinance numpy
 
-      - name: Check files
+      # ======================================================
+      # 4. 저장소 구조 확인
+      # ======================================================
+
+      - name: Check repository files
         run: |
-          echo "=== ROOT ==="
-          ls -la
-          echo "=== PYTHON FILES ==="
+          echo "=========================================="
+          echo "REPOSITORY FILES"
+          echo "=========================================="
+
+          pwd
+
+          echo ""
+
+          ls -lah
+
+          echo ""
+
+          echo "Python files:"
           find . -maxdepth 2 -name "*.py" -print
+
+      # ======================================================
+      # 5. OPTION FLOW SCANNER V1 실행
+      # ======================================================
 
       - name: Run OPTION FLOW SCANNER V1
         env:
           PYTHONIOENCODING: utf-8
         run: |
-          cd .
+          echo "=========================================="
+          echo "START OPTION FLOW SCANNER V1"
+          echo "=========================================="
+
           python batch_option_search.py
+
+          echo ""
+
+          echo "=========================================="
+          echo "OPTION FLOW SCANNER V1 FINISHED"
+          echo "=========================================="
+
+      # ======================================================
+      # 6. 결과 파일 확인
+      # ======================================================
+
+      - name: Check result CSV
+        run: |
+
+          echo "=========================================="
+          echo "CHECK RESULT CSV"
+          echo "=========================================="
+
+          if [ -f "03_RESULTS/daily/OPTION_FINAL_RANKING.csv" ]; then
+
+            echo "✅ RESULT CSV FOUND"
+
+            echo ""
+
+            ls -lh \
+              03_RESULTS/daily/OPTION_FINAL_RANKING.csv
+
+            echo ""
+
+            echo "CSV CONTENT:"
+            head -20 \
+              03_RESULTS/daily/OPTION_FINAL_RANKING.csv
+
+          else
+
+            echo "❌ RESULT CSV NOT FOUND"
+
+            echo ""
+
+            echo "Searching for CSV files..."
+
+            find . \
+              -type f \
+              -name "*.csv" \
+              -print
+
+            exit 1
+
+          fi
