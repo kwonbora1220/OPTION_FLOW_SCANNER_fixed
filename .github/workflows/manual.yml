@@ -26,3 +26,9 @@ jobs:
           PYTHONIOENCODING: utf-8
         run: |
           python batch_option_search.py
+
+      - name: Send V1 result to Telegram
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        run: |
+          python telegram_sender_v1.py
