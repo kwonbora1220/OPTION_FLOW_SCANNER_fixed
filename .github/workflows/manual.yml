@@ -42,97 +42,48 @@ jobs:
       # 4. CHECK FILES
       # ======================================================
 
-      - name: Check repository files
+      - name: Check repository
         run: |
 
           echo "=========================================="
-          echo "REPOSITORY"
+          echo "📂 REPOSITORY"
           echo "=========================================="
 
           pwd
 
           echo ""
-
-          ls -lah
-
-          echo ""
-
           echo "PYTHON FILES"
-
-          find . \
-            -type f \
-            -name "*.py" \
-            -print
+          find . -type f -name "*.py" -print
 
           echo ""
-
           echo "WORKFLOW FILES"
+          find . -type f \( -name "*.yml" -o -name "*.yaml" \) -print
 
-          find . \
-            -type f \
-            \( \
-              -name "*.yml" \
-              -o \
-              -name "*.yaml" \
-            \) \
-            -print
-
-
-      # ======================================================
-      # 5. CHECK SELECTED SYMBOLS
-      # ======================================================
-
-      - name: Check selected symbols
-        run: |
-
-          echo "=========================================="
-          echo "📊 SELECTED SYMBOLS"
+          echo ""
           echo "=========================================="
 
-          python - <<'PY'
-
-          from selected_symbols import SELECTED_SYMBOLS
-
-          print(
-              f"총 종목 수: {len(SELECTED_SYMBOLS)}"
-          )
-
-          for i, ticker in enumerate(
-              SELECTED_SYMBOLS,
-              1
-          ):
-
-              print(
-                  f"{i:02d}. {ticker}"
-              )
-
-          PY
-
 
       # ======================================================
-      # 6. OPTION SEARCH + FINAL BATCH
+      # 5. RUN COMPLETE SCANNER
       #
-      # option_search.py
-      #     ↓
-      # 개별 상세 분석
-      #     ↓
+      # batch_option_search.py가
+      #
+      # OPTION SEARCH
+      #      ↓
       # 개별 CSV
-      #     ↓
+      #      ↓
       # 개별 Telegram
+      #      ↓
+      # FINAL SCORE
+      #      ↓
+      # FINAL CSV
+      #      ↓
+      # FINAL Telegram
       #
-      # 모든 종목 처리 후
-      #
-      # batch_option_search.py
-      #     ↓
-      # Final Score
-      #     ↓
-      # Final Ranking
-      #     ↓
-      # Final Telegram
-      #
+      # 전부 담당한다.
       # ======================================================
 
-      - name: Run OPTION FLOW SCANNER
+      - name: Run OPTION FLOW SCANNER V1
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -140,100 +91,75 @@ jobs:
 
         run: |
 
+          echo "=========================================="
+          echo "🔥 OPTION FLOW SCANNER V1 START"
+          echo "=========================================="
+
           echo ""
-          echo "=========================================="
-          echo "🔥 OPTION FLOW SCANNER START"
-          echo "=========================================="
+
+          if [ -z "$TELEGRAM_BOT_TOKEN" ]; then
+            echo "❌ TELEGRAM_BOT_TOKEN 없음"
+            exit 1
+          fi
+
+          echo "✅ TELEGRAM_BOT_TOKEN 확인"
+
+          if [ -z "$TELEGRAM_CHAT_ID" ]; then
+            echo "❌ TELEGRAM_CHAT_ID 없음"
+            exit 1
+          fi
+
+          echo "✅ TELEGRAM_CHAT_ID 확인"
+
+          echo ""
 
           python batch_option_search.py
 
-          echo ""
-          echo "=========================================="
-          echo "🔥 OPTION FLOW SCANNER FINISHED"
-          echo "=========================================="
-
 
       # ======================================================
-      # 7. CHECK OPTION SEARCH CSV
+      # 6. CHECK FINAL RESULT
       # ======================================================
 
-      - name: Check OPTION SEARCH CSV
+      - name: Check final result
+        if: always()
         run: |
 
-          echo ""
           echo "=========================================="
-          echo "🔎 OPTION SEARCH CSV"
+          echo "📊 FINAL RESULT CHECK"
           echo "=========================================="
 
-          COUNT=$(find . \
+          echo ""
+
+          find . \
             -type f \
             -name "*_OPTION_SEARCH.csv" \
-            | wc -l)
-
-          echo ""
-          echo "OPTION SEARCH CSV COUNT: $COUNT"
+            -print
 
           echo ""
 
-          if [ "$COUNT" -eq 0 ]; then
+          if [ -f "03_RESULTS/daily/OPTION_FINAL_RANKING.csv" ]; then
 
-            echo "❌ OPTION SEARCH CSV 없음"
-
-            find . \
-              -type f \
-              -name "*.csv" \
-              -print
-
-            exit 1
-
-          fi
-
-          echo "✅ OPTION SEARCH CSV 확인"
-
-
-      # ======================================================
-      # 8. CHECK FINAL CSV
-      # ======================================================
-
-      - name: Check FINAL CSV
-        run: |
-
-          echo ""
-          echo "=========================================="
-          echo "📊 FINAL RESULT"
-          echo "=========================================="
-
-          RESULT="03_RESULTS/daily/OPTION_FINAL_RANKING.csv"
-
-          if [ ! -f "$RESULT" ]; then
-
-            echo "❌ FINAL CSV 없음"
+            echo "✅ OPTION_FINAL_RANKING.csv FOUND"
 
             echo ""
-            echo "현재 CSV 목록:"
 
-            find . \
-              -type f \
-              -name "*.csv" \
-              -print
+            ls -lh \
+              "03_RESULTS/daily/OPTION_FINAL_RANKING.csv"
 
-            exit 1
+            echo ""
+
+            cat \
+              "03_RESULTS/daily/OPTION_FINAL_RANKING.csv"
+
+          else
+
+            echo "❌ OPTION_FINAL_RANKING.csv NOT FOUND"
 
           fi
 
-          echo "✅ FINAL CSV 확인"
-
-          echo ""
-
-          ls -lh "$RESULT"
-
-          echo ""
-
-          cat "$RESULT"
-
 
       # ======================================================
-      # 9. FINAL STATUS
+      # 7. FINAL STATUS
       # ======================================================
 
       - name: Final status
@@ -242,23 +168,25 @@ jobs:
 
           echo ""
           echo "=========================================="
-          echo "🔥 OPTION FLOW SCANNER V1"
+          echo "🔥 OPTION FLOW SCANNER V1 COMPLETE"
           echo "=========================================="
 
-          echo ""
-          echo "✅ Repository checkout"
-          echo "✅ Python 3.12"
-          echo "✅ Dependencies"
-          echo "✅ Selected symbols"
-          echo "✅ OPTION SEARCH"
-          echo "✅ Individual CSV"
-          echo "✅ Individual Telegram"
-          echo "✅ FINAL SCORE"
-          echo "✅ FINAL RANKING"
-          echo "✅ FINAL Telegram"
+          python --version
 
           echo ""
-          echo "🔥 ALL PROCESS FINISHED"
+
+          echo "OPTION SEARCH"
+          echo "      ↓"
+          echo "INDIVIDUAL CSV"
+          echo "      ↓"
+          echo "INDIVIDUAL TELEGRAM"
+          echo "      ↓"
+          echo "FINAL SCORE"
+          echo "      ↓"
+          echo "FINAL CSV"
+          echo "      ↓"
+          echo "FINAL TELEGRAM"
 
           echo ""
+
           echo "=========================================="
