@@ -2,33 +2,36 @@ import os
 import requests
 import pandas as pd
 
+
 # ============================================================
 # CONFIG
 # ============================================================
 
-BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+BOT_TOKEN = os.environ.get(
+    "TELEGRAM_BOT_TOKEN",
+    ""
+)
 
-# 실제 Telegram Chat ID
-CHAT_ID = "7729872113"
+CHAT_ID = os.environ.get(
+    "TELEGRAM_CHAT_ID",
+    "7729872113"
+)
+
 
 # ============================================================
-# RESULT FILE SEARCH
+# RESULT FILE
 # ============================================================
 
-def find_result_file():
+BASE_DIR = os.path.dirname(
+    os.path.abspath(__file__)
+)
 
-    target = "OPTION_FINAL_RANKING.csv"
-
-    for root, dirs, files in os.walk("."):
-
-        if target in files:
-
-            return os.path.join(
-                root,
-                target
-            )
-
-    return None
+RESULT_FILE = os.path.join(
+    BASE_DIR,
+    "03_RESULTS",
+    "daily",
+    "OPTION_FINAL_RANKING.csv"
+)
 
 
 # ============================================================
@@ -44,23 +47,33 @@ def send_message(text):
         )
 
     url = (
-        f"https://api.telegram.org/"
+        "https://api.telegram.org/"
         f"bot{BOT_TOKEN}/sendMessage"
     )
 
-    response = requests.post(
+    max_length = 4000
 
-        url,
+    chunks = [
+        text[i:i + max_length]
+        for i in range(
+            0,
+            len(text),
+            max_length
+        )
+    ]
 
-        data={
-            "chat_id": CHAT_ID,
-            "text": text
-        },
+    for chunk in chunks:
 
-        timeout=30
-    )
+        response = requests.post(
+            url,
+            data={
+                "chat_id": CHAT_ID,
+                "text": chunk
+            },
+            timeout=30
+        )
 
-    response.raise_for_status()
+        response.raise_for_status()
 
 
 # ============================================================
@@ -70,12 +83,10 @@ def send_message(text):
 def main():
 
     print("=" * 70)
-    print("📱 TELEGRAM V1 RESULT SENDER")
+    print(
+        "📱 TELEGRAM V1 RESULT SENDER"
+    )
     print("=" * 70)
-
-    # --------------------------------------------------------
-    # TOKEN
-    # --------------------------------------------------------
 
     if not BOT_TOKEN:
 
@@ -85,56 +96,55 @@ def main():
 
         raise SystemExit(1)
 
-    print("✅ Telegram Bot Token 확인")
+    print(
+        "✅ Telegram Bot Token 확인"
+    )
 
     # --------------------------------------------------------
-    # RESULT FILE SEARCH
+    # RESULT FILE
     # --------------------------------------------------------
 
-    result_file = find_result_file()
-
-    if not result_file:
+    if not os.path.isfile(
+        RESULT_FILE
+    ):
 
         print(
             "❌ OPTION_FINAL_RANKING.csv를 찾을 수 없습니다."
         )
 
         print("")
-        print("현재 저장소의 CSV 파일:")
-
-        for root, dirs, files in os.walk("."):
-
-            for file in files:
-
-                if file.endswith(".csv"):
-
-                    print(
-                        os.path.join(
-                            root,
-                            file
-                        )
-                    )
+        print(
+            f"찾는 위치: {RESULT_FILE}"
+        )
 
         raise SystemExit(1)
 
     print(
-        f"✅ 결과 파일 발견: {result_file}"
+        f"✅ 결과 파일 발견: {RESULT_FILE}"
     )
 
     # --------------------------------------------------------
-    # CSV LOAD
+    # LOAD
     # --------------------------------------------------------
 
     df = pd.read_csv(
-        result_file
+        RESULT_FILE
     )
+
+    if df.empty:
+
+        print(
+            "❌ 결과 CSV가 비어 있습니다."
+        )
+
+        raise SystemExit(1)
 
     print(
         f"📊 종목 수: {len(df)}"
     )
 
     # --------------------------------------------------------
-    # 전체 순위
+    # RANKING
     # --------------------------------------------------------
 
     message = (
@@ -159,16 +169,16 @@ def main():
             )
         )
 
-        score = row.get(
-            "score",
-            0
-        )
-
         try:
 
-            score = float(score)
+            score = float(
+                row.get(
+                    "score",
+                    0
+                )
+            )
 
-        except:
+        except Exception:
 
             score = 0
 
@@ -190,10 +200,6 @@ def main():
             f"{status}\n"
         )
 
-    # --------------------------------------------------------
-    # Telegram 전송
-    # --------------------------------------------------------
-
     send_message(
         message
     )
@@ -203,7 +209,7 @@ def main():
     )
 
     # --------------------------------------------------------
-    # TOP 5 상세
+    # TOP 5
     # --------------------------------------------------------
 
     detail = (
@@ -217,10 +223,7 @@ def main():
         ticker = str(
             row.get(
                 "ticker",
-                row.get(
-                    "symbol",
-                    "UNKNOWN"
-                )
+                "UNKNOWN"
             )
         )
 
@@ -246,6 +249,36 @@ def main():
 
         try:
 
+            price_text = (
+                f"${float(price):.2f}"
+            )
+
+        except Exception:
+
+            price_text = str(price)
+
+        try:
+
+            call_text = (
+                f"${float(call_wall):g}"
+            )
+
+        except Exception:
+
+            call_text = str(call_wall)
+
+        try:
+
+            put_text = (
+                f"${float(put_wall):g}"
+            )
+
+        except Exception:
+
+            put_text = str(put_wall)
+
+        try:
+
             iv_value = float(iv)
 
             if iv_value < 5:
@@ -260,14 +293,14 @@ def main():
                     f"{iv_value:.1f}%"
                 )
 
-        except:
+        except Exception:
 
             iv_text = str(iv)
 
         detail += (
-            f"📌 {ticker} ${price}\n"
-            f"📈 Call Wall: ${call_wall}\n"
-            f"📉 Put Wall: ${put_wall}\n"
+            f"📌 {ticker} {price_text}\n"
+            f"📈 Call Wall: {call_text}\n"
+            f"📉 Put Wall: {put_text}\n"
             f"IV: {iv_text}\n\n"
         )
 
@@ -281,7 +314,9 @@ def main():
 
     print("")
     print("=" * 70)
-    print("🔥 TELEGRAM V1 완료")
+    print(
+        "🔥 TELEGRAM V1 완료"
+    )
     print("=" * 70)
 
 
