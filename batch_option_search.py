@@ -1,4 +1,3 @@
-
 import os
 import time
 import pandas as pd
@@ -29,13 +28,10 @@ BASE_DIR = os.path.dirname(
     os.path.abspath(__file__)
 )
 
-RESULT_DIR = os.path.abspath(
-    os.path.join(
-        BASE_DIR,
-        "..",
-        "03_RESULTS",
-        "daily"
-    )
+RESULT_DIR = os.path.join(
+    BASE_DIR,
+    "03_RESULTS",
+    "daily"
 )
 
 os.makedirs(
@@ -135,6 +131,7 @@ def calculate_score(
         if ratio >= 0.60:
 
             score += 10
+
             reasons.append(
                 "Call Premium 강세"
             )
@@ -142,6 +139,7 @@ def calculate_score(
         elif ratio >= 0.55:
 
             score += 6
+
             reasons.append(
                 "Call Premium 우세"
             )
@@ -149,6 +147,7 @@ def calculate_score(
         elif ratio <= 0.40:
 
             score -= 10
+
             reasons.append(
                 "Put Premium 강세"
             )
@@ -156,6 +155,7 @@ def calculate_score(
         elif ratio <= 0.45:
 
             score -= 6
+
             reasons.append(
                 "Put Premium 우세"
             )
@@ -187,6 +187,7 @@ def calculate_score(
         if ratio >= 0.60:
 
             score += 8
+
             reasons.append(
                 "Call 거래량 우세"
             )
@@ -194,6 +195,7 @@ def calculate_score(
         elif ratio <= 0.40:
 
             score -= 8
+
             reasons.append(
                 "Put 거래량 우세"
             )
@@ -225,6 +227,7 @@ def calculate_score(
         if ratio >= 0.60:
 
             score += 6
+
             reasons.append(
                 "Call OI 우세"
             )
@@ -232,6 +235,7 @@ def calculate_score(
         elif ratio <= 0.40:
 
             score -= 6
+
             reasons.append(
                 "Put OI 우세"
             )
@@ -496,33 +500,38 @@ def calculate_score(
     bearish = 0
 
     if delta > 0:
+
         bullish += 1
 
     elif delta < 0:
+
         bearish += 1
 
     if gex > 0:
+
         bullish += 1
 
     elif gex < 0:
+
         bearish += 1
 
     if hiro > 0:
+
         bullish += 1
 
     elif hiro < 0:
+
         bearish += 1
 
     if vanna > 0:
+
         bullish += 1
 
     elif vanna < 0:
+
         bearish += 1
 
-    if (
-        bullish >= 3
-        and bearish >= 1
-    ):
+    if bullish >= 3 and bearish >= 1:
 
         score -= 8
 
@@ -604,11 +613,13 @@ def make_final_result(
 
     greeks = analysis["greeks"]
 
-    score, direction, reasons = (
-        calculate_score(
-            df,
-            greeks
-        )
+    (
+        score,
+        direction,
+        reasons
+    ) = calculate_score(
+        df,
+        greeks
     )
 
     category = classify(
@@ -707,7 +718,7 @@ def save_ranking(results):
 
     print("")
     print(
-        f"💾 FINAL CSV 저장:"
+        "💾 FINAL CSV 저장:"
     )
 
     print(
@@ -1024,9 +1035,11 @@ def main():
 
     print("")
     print("=" * 70)
+
     print(
-        "🔥 OPTION FLOW SCANNER V2"
+        "🔥 OPTION FLOW SCANNER V1"
     )
+
     print("=" * 70)
 
     print("")
@@ -1072,10 +1085,6 @@ def main():
 
     results = []
 
-    # ========================================================
-    # ALL TICKERS
-    # ========================================================
-
     total = len(
         SELECTED_SYMBOLS
     )
@@ -1103,12 +1112,6 @@ def main():
 
         try:
 
-            # ------------------------------------------------
-            # 여기서 OPTION SEARCH를 직접 실행
-            #
-            # CSV를 먼저 찾지 않는다.
-            # ------------------------------------------------
-
             analysis = analyze_ticker(
                 ticker
             )
@@ -1120,10 +1123,6 @@ def main():
                 )
 
                 continue
-
-            # ------------------------------------------------
-            # 바로 FINAL SCORE
-            # ------------------------------------------------
 
             final_result = (
                 make_final_result(
@@ -1156,35 +1155,36 @@ def main():
         except Exception as e:
 
             print("")
+
             print(
                 f"❌ {ticker} 전체 분석 실패"
             )
 
             print(
-                f"   {e}"
+                f"   {type(e).__name__}: {e}"
             )
 
         if i < total:
 
             print("")
+
             print(
                 "⏳ 다음 종목 준비..."
             )
 
             time.sleep(3)
 
-    # ========================================================
-    # CHECK
-    # ========================================================
-
     print("")
     print("=" * 70)
+
     print(
         "📊 ALL OPTION SEARCH FINISHED"
     )
+
     print("=" * 70)
 
     print("")
+
     print(
         f"✅ 최종 분석 완료: "
         f"{len(results)}개"
@@ -1210,7 +1210,7 @@ def main():
     )
 
     # ========================================================
-    # SAVE FINAL CSV
+    # SAVE
     # ========================================================
 
     save_ranking(
@@ -1218,7 +1218,7 @@ def main():
     )
 
     # ========================================================
-    # BUILD FINAL MESSAGE
+    # FINAL MESSAGE
     # ========================================================
 
     final_message = (
@@ -1229,9 +1229,11 @@ def main():
 
     print("")
     print("=" * 70)
+
     print(
         "🧠 FINAL OPTION RANKING"
     )
+
     print("=" * 70)
 
     print("")
@@ -1245,9 +1247,11 @@ def main():
 
     print("")
     print("=" * 70)
+
     print(
         "📱 FINAL TELEGRAM"
     )
+
     print("=" * 70)
 
     telegram_ok = send_telegram(
@@ -1266,18 +1270,17 @@ def main():
             "⚠️ 최종 Telegram 전송 실패"
         )
 
-    # ========================================================
-    # DONE
-    # ========================================================
-
     print("")
     print("=" * 70)
+
     print(
-        "🔥 OPTION FLOW SCANNER V2 COMPLETE"
+        "🔥 OPTION FLOW SCANNER V1 COMPLETE"
     )
+
     print("=" * 70)
 
     print("")
+
     print(
         "✅ 개별 OPTION SEARCH 완료"
     )
