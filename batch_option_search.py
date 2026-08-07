@@ -1505,21 +1505,28 @@ except Exception as e:
     )
 
 
+```python
 # ============================================================
 # CSV
 # ============================================================
 
-out_dir = os.path.abspath(
-    os.path.join(
-        os.path.dirname(
-            os.path.abspath(
-                __file__
-            )
-        ),
-        "..",
-        "03_RESULTS",
-        "daily"
-    )
+# GitHub Actions에서는 batch_option_search.py가
+# 저장소 루트에 있으므로 ".."를 사용하면 안 된다.
+#
+# 저장 위치:
+# OPTION_FLOW_SCANNER_fixed/
+# └── 03_RESULTS/
+#     └── daily/
+#         └── OPTION_FINAL_RANKING.csv
+
+BASE_DIR = os.path.dirname(
+    os.path.abspath(__file__)
+)
+
+out_dir = os.path.join(
+    BASE_DIR,
+    "03_RESULTS",
+    "daily"
 )
 
 os.makedirs(
@@ -1527,12 +1534,10 @@ os.makedirs(
     exist_ok=True
 )
 
-
 ranking_file = os.path.join(
     out_dir,
     "OPTION_FINAL_RANKING.csv"
 )
-
 
 ranking_rows = []
 
@@ -1583,7 +1588,6 @@ for r in results:
         }
     )
 
-
 pd.DataFrame(
     ranking_rows
 ).to_csv(
@@ -1591,7 +1595,6 @@ pd.DataFrame(
     index=False,
     encoding="utf-8-sig"
 )
-
 
 print("")
 
@@ -1613,4 +1616,6 @@ print(
 print(
     "=" * 70
 )
+```
+
 
