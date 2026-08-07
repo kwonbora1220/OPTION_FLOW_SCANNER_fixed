@@ -1,3 +1,4 @@
+```yaml
 name: OPTION FLOW SCANNER V1
 
 on:
@@ -10,7 +11,7 @@ jobs:
     steps:
 
       # ======================================================
-      # 1. GitHub 저장소 가져오기
+      # 1. 저장소 가져오기
       # ======================================================
 
       - name: Checkout repository
@@ -26,7 +27,7 @@ jobs:
           python-version: "3.12"
 
       # ======================================================
-      # 3. Python 패키지 설치
+      # 3. 필요한 패키지 설치
       # ======================================================
 
       - name: Install dependencies
@@ -35,7 +36,7 @@ jobs:
           pip install pandas requests yfinance numpy
 
       # ======================================================
-      # 4. 저장소 구조 확인
+      # 4. 저장소 파일 확인
       # ======================================================
 
       - name: Check repository files
@@ -47,61 +48,95 @@ jobs:
           pwd
 
           echo ""
-          echo "ROOT:"
+          echo "ROOT FILES:"
           ls -lah
 
           echo ""
-          echo "ALL PYTHON FILES:"
-          find . -maxdepth 4 -type f -name "*.py" -print
+          echo "PYTHON FILES:"
+          find . -maxdepth 3 -type f -name "*.py" -print
 
           echo ""
-          echo "ALL CSV FILES BEFORE SCAN:"
-          find . -type f -name "*.csv" -print
+          echo "OPTION SEARCH FILE:"
+          if [ -f "option_search.py" ]; then
+            echo "✅ option_search.py FOUND"
+          else
+            echo "❌ option_search.py NOT FOUND"
+            exit 1
+          fi
+
+          echo ""
+          echo "BATCH SEARCH FILE:"
+          if [ -f "batch_option_search.py" ]; then
+            echo "✅ batch_option_search.py FOUND"
+          else
+            echo "❌ batch_option_search.py NOT FOUND"
+            exit 1
+          fi
+
+          echo ""
+          echo "SYMBOL FILE:"
+          if [ -f "selected_symbols.py" ]; then
+            echo "✅ selected_symbols.py FOUND"
+          else
+            echo "❌ selected_symbols.py NOT FOUND"
+            exit 1
+          fi
+
+          echo ""
+          echo "TELEGRAM FILE:"
+          if [ -f "telegram_sender_v1.py" ]; then
+            echo "✅ telegram_sender_v1.py FOUND"
+          else
+            echo "❌ telegram_sender_v1.py NOT FOUND"
+            exit 1
+          fi
 
       # ======================================================
-      # 5. OPTION FLOW SCANNER V1 실행
+      # 5. OPTION FLOW SCANNER 실행
       # ======================================================
 
       - name: Run OPTION FLOW SCANNER V1
         env:
           PYTHONIOENCODING: utf-8
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         run: |
           echo "=========================================="
-          echo "START OPTION FLOW SCANNER V1"
+          echo "🔥 START OPTION FLOW SCANNER V1"
           echo "=========================================="
 
           python batch_option_search.py
 
           echo ""
           echo "=========================================="
-          echo "OPTION FLOW SCANNER V1 FINISHED"
+          echo "🔥 OPTION FLOW SCANNER V1 FINISHED"
           echo "=========================================="
 
       # ======================================================
-      # 6. 결과 CSV 전체 검색
+      # 6. 결과 CSV 찾기
       # ======================================================
 
       - name: Find result CSV
         run: |
           echo "=========================================="
-          echo "SEARCHING RESULT CSV"
+          echo "🔎 SEARCHING RESULT CSV"
           echo "=========================================="
 
-          echo ""
-          echo "ALL CSV FILES:"
-          find . -type f -name "*.csv" -print
+          find . \
+            -type f \
+            -name "OPTION_FINAL_RANKING.csv" \
+            -print
 
           echo ""
-          echo "OPTION_FINAL_RANKING.csv SEARCH:"
-          find . -type f -name "OPTION_FINAL_RANKING.csv" -print
 
-          if find . -type f -name "OPTION_FINAL_RANKING.csv" | grep -q .; then
-            echo ""
-            echo "✅ OPTION_FINAL_RANKING.csv FOUND"
+          if [ -f "03_RESULTS/daily/OPTION_FINAL_RANKING.csv" ]; then
+            echo "✅ RESULT CSV FOUND"
+            ls -lh "03_RESULTS/daily/OPTION_FINAL_RANKING.csv"
           else
+            echo "❌ RESULT CSV NOT FOUND"
+
             echo ""
-            echo "❌ OPTION_FINAL_RANKING.csv NOT FOUND"
+            echo "ALL CSV FILES:"
+            find . -type f -name "*.csv" -print
+
             exit 1
           fi
 
@@ -112,71 +147,49 @@ jobs:
       - name: Show result CSV
         run: |
           echo "=========================================="
-          echo "RESULT CSV CONTENT"
+          echo "📊 RESULT CSV"
           echo "=========================================="
 
-          RESULT_FILE=$(find . -type f -name "OPTION_FINAL_RANKING.csv" | head -1)
-
-          echo "RESULT FILE:"
-          echo "$RESULT_FILE"
-
-          echo ""
-          echo "FILE INFO:"
-          ls -lh "$RESULT_FILE"
-
-          echo ""
-          echo "CSV CONTENT:"
-          head -20 "$RESULT_FILE"
+          cat "03_RESULTS/daily/OPTION_FINAL_RANKING.csv"
 
       # ======================================================
-      # 8. TELEGRAM V1 결과 전송
+      # 8. Telegram 전송
       # ======================================================
 
       - name: Send V1 result to Telegram
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: "7729872113"
           PYTHONIOENCODING: utf-8
         run: |
           echo "=========================================="
-          echo "TELEGRAM V1 RESULT SENDER"
+          echo "📱 TELEGRAM V1 RESULT SENDER"
           echo "=========================================="
 
           if [ -z "$TELEGRAM_BOT_TOKEN" ]; then
-            echo "❌ TELEGRAM_BOT_TOKEN이 GitHub Secrets에 없습니다."
+            echo "❌ TELEGRAM_BOT_TOKEN이 없습니다."
             exit 1
           fi
 
           echo "✅ TELEGRAM_BOT_TOKEN 확인"
-
-          echo ""
-          echo "RESULT CSV:"
-          find . -type f -name "OPTION_FINAL_RANKING.csv" -print
+          echo "✅ TELEGRAM_CHAT_ID 확인"
 
           python telegram_sender_v1.py
 
-          echo ""
-          echo "=========================================="
-          echo "TELEGRAM V1 SEND FINISHED"
-          echo "=========================================="
-
       # ======================================================
-      # 9. 최종 완료
+      # 9. 최종 상태
       # ======================================================
 
       - name: Final status
         run: |
           echo ""
-          echo "=================================================="
+          echo "=========================================="
           echo "🔥 OPTION FLOW SCANNER V1 COMPLETE"
-          echo "=================================================="
-
-          echo ""
-          echo "Generated CSV:"
-          find . -type f -name "OPTION_FINAL_RANKING.csv" -print
-
-          echo ""
-          echo "Python files:"
-          find . -maxdepth 4 -type f -name "*.py" -print
-
-          echo ""
-          echo "=================================================="
+          echo "=========================================="
+          echo "✅ 옵션 데이터 수집"
+          echo "✅ 옵션 분석"
+          echo "✅ 점수 계산"
+          echo "✅ CSV 생성"
+          echo "✅ Telegram 전송"
+          echo "=========================================="
+```
