@@ -20,7 +20,7 @@ BOT_TOKEN = os.environ.get(
 
 CHAT_ID = os.environ.get(
     "TELEGRAM_CHAT_ID",
-    "7729872113"
+    ""
 )
 
 MAX_DTE = 180
@@ -41,6 +41,19 @@ RESULT_DIR = os.path.join(
     "03_RESULTS",
     "daily"
 )
+
+# 만약 option_search.py가 02_PROGRAM 안에 있다면
+# 아래 경로로 자동 변경
+if os.path.basename(BASE_DIR).upper() == "02_PROGRAM":
+
+    RESULT_DIR = os.path.abspath(
+        os.path.join(
+            BASE_DIR,
+            "..",
+            "03_RESULTS",
+            "daily"
+        )
+    )
 
 os.makedirs(
     RESULT_DIR,
@@ -67,8 +80,7 @@ def get_current_price(ticker):
             hist = t.history(
                 period="5d",
                 interval="1d",
-                auto_adjust=False,
-                timeout=30
+                auto_adjust=False
             )
 
             if not hist.empty:
@@ -94,7 +106,6 @@ def get_current_price(ticker):
             )
 
         if attempt < 3:
-
             time.sleep(2)
 
     print(
@@ -201,12 +212,10 @@ def get_option_data(ticker):
             "옵션 데이터를 가져오지 못했습니다."
         )
 
-    df = pd.concat(
+    return pd.concat(
         rows,
         ignore_index=True
     )
-
-    return df
 
 
 # ============================================================
@@ -272,11 +281,9 @@ def safe_iv(iv):
         iv = float(iv)
 
         if iv <= 0:
-
             return 0.0001
 
         if iv > 5:
-
             iv = iv / 100
 
         return max(
@@ -467,7 +474,7 @@ def calculate_option_metrics(
     df["IV"] = iv_list
 
     # --------------------------------------------------------
-    # PREMIUM
+    # Premium
     # --------------------------------------------------------
 
     df["premium_flow"] = (
@@ -494,7 +501,7 @@ def calculate_option_metrics(
     ] *= -1
 
     # --------------------------------------------------------
-    # DELTA EXPOSURE
+    # Delta Exposure
     # --------------------------------------------------------
 
     df["delta_exposure"] = (
@@ -505,7 +512,7 @@ def calculate_option_metrics(
     )
 
     # --------------------------------------------------------
-    # VANNA
+    # Vanna
     # --------------------------------------------------------
 
     df["vanna_exposure"] = (
@@ -516,7 +523,7 @@ def calculate_option_metrics(
     )
 
     # --------------------------------------------------------
-    # CHARM
+    # Charm
     # --------------------------------------------------------
 
     df["charm_exposure"] = (
@@ -539,11 +546,9 @@ def calculate_option_metrics(
             ask = float(row["ask"])
 
             if ask > 0 and last >= ask * 0.98:
-
                 return 1
 
             if bid > 0 and last <= bid * 1.02:
-
                 return -1
 
             return 0
@@ -626,7 +631,6 @@ def find_walls(
     ].copy()
 
     if active.empty:
-
         return None, None
 
     active["distance_pct"] = (
@@ -643,10 +647,7 @@ def find_walls(
     ].copy()
 
     if active.empty:
-
         return None, None
-
-    # CALL WALL
 
     calls = active[
         (
@@ -676,8 +677,6 @@ def find_walls(
                 group.idxmax()
             )
 
-    # PUT WALL
-
     puts = active[
         (
             active["option_type"]
@@ -706,10 +705,7 @@ def find_walls(
                 group.idxmin()
             )
 
-    return (
-        call_wall,
-        put_wall
-    )
+    return call_wall, put_wall
 
 
 # ============================================================
@@ -745,24 +741,29 @@ def find_top_flow(
         active["distance_pct"] <= 30
     ].copy()
 
-    calls = active[
-        active["option_type"] == "CALL"
-    ].sort_values(
-        "volume",
-        ascending=False
-    ).head(5)
-
-    puts = active[
-        active["option_type"] == "PUT"
-    ].sort_values(
-        "volume",
-        ascending=False
-    ).head(5)
-
-    return (
-        calls,
-        puts
+    calls = (
+        active[
+            active["option_type"] == "CALL"
+        ]
+        .sort_values(
+            "volume",
+            ascending=False
+        )
+        .head(5)
     )
+
+    puts = (
+        active[
+            active["option_type"] == "PUT"
+        ]
+        .sort_values(
+            "volume",
+            ascending=False
+        )
+        .head(5)
+    )
+
+    return calls, puts
 
 
 # ============================================================
@@ -772,11 +773,8 @@ def find_top_flow(
 def format_money(x):
 
     try:
-
         x = float(x)
-
     except Exception:
-
         return "$0"
 
     sign = ""
@@ -806,24 +804,18 @@ def format_money(x):
 def format_greek(x):
 
     try:
-
         return f"{float(x):+.3f}"
-
     except Exception:
-
         return "0.000"
 
 
 def format_iv(x):
 
     try:
-
         return (
             f"{float(x) * 100:.1f}%"
         )
-
     except Exception:
-
         return "0.0%"
 
 
@@ -840,71 +832,48 @@ def build_structure_judgement(
     hiro = greeks["HIRO"]
 
     if delta > 0:
-
         delta_label = "🟢 BULLISH"
-
     elif delta < 0:
-
         delta_label = "🔴 BEARISH"
-
     else:
-
         delta_label = "🟡 NEUTRAL"
 
     if gex > 0:
-
         gex_label = "🟢 POSITIVE"
-
     elif gex < 0:
-
         gex_label = "🔴 NEGATIVE"
-
     else:
-
         gex_label = "🟡 NEUTRAL"
 
     if hiro > 0:
-
         hiro_label = "🟢 POSITIVE"
-
     elif hiro < 0:
-
         hiro_label = "🔴 NEGATIVE"
-
     else:
-
         hiro_label = "🟡 NEUTRAL"
 
     score = 0
 
     if delta > 0:
         score += 1
-
     elif delta < 0:
         score -= 1
 
     if hiro > 0:
         score += 1
-
     elif hiro < 0:
         score -= 1
 
     if gex > 0:
         score += 1
-
     elif gex < 0:
         score -= 1
 
     if score >= 2:
-
         overall = "🟢 BULLISH"
-
     elif score <= -2:
-
         overall = "🔴 BEARISH"
-
     else:
-
         overall = "🟡 NEUTRAL"
 
     return {
@@ -925,9 +894,7 @@ def build_report(
     df
 ):
 
-    greeks = calculate_aggregate_greeks(
-        df
-    )
+    greeks = calculate_aggregate_greeks(df)
 
     call_wall, put_wall = find_walls(
         df,
@@ -994,8 +961,7 @@ def build_report(
     if call_wall is not None:
 
         lines.append(
-            f"📈 CALL WALL "
-            f"<b>${call_wall:g}</b>"
+            f"📈 CALL WALL <b>${call_wall:g}</b>"
         )
 
     else:
@@ -1007,8 +973,7 @@ def build_report(
     if put_wall is not None:
 
         lines.append(
-            f"📉 PUT WALL "
-            f"<b>${put_wall:g}</b>"
+            f"📉 PUT WALL <b>${put_wall:g}</b>"
         )
 
     else:
@@ -1105,8 +1070,7 @@ def build_report(
 
         lines.append(
             f"GEX {format_money(r['GEX'])} | "
-            f"Premium "
-            f"{format_money(r['premium_flow'])}"
+            f"Premium {format_money(r['premium_flow'])}"
         )
 
         lines.append("")
@@ -1153,8 +1117,7 @@ def build_report(
 
         lines.append(
             f"GEX {format_money(r['GEX'])} | "
-            f"Premium "
-            f"{format_money(r['premium_flow'])}"
+            f"Premium {format_money(r['premium_flow'])}"
         )
 
         lines.append("")
@@ -1174,22 +1137,19 @@ def build_report(
     lines.append("")
 
     lines.append(
-        f"📍 현재가: "
-        f"<b>${current_price:.2f}</b>"
+        f"📍 현재가: <b>${current_price:.2f}</b>"
     )
 
     if call_wall is not None:
 
         lines.append(
-            f"🟢 상방 핵심: "
-            f"<b>${call_wall:g}</b>"
+            f"🟢 상방 핵심: <b>${call_wall:g}</b>"
         )
 
     if put_wall is not None:
 
         lines.append(
-            f"🔴 하방 핵심: "
-            f"<b>${put_wall:g}</b>"
+            f"🔴 하방 핵심: <b>${put_wall:g}</b>"
         )
 
     lines.append(
@@ -1362,57 +1322,43 @@ def send_telegram(text):
 
         return False
 
+    if not CHAT_ID:
+
+        print(
+            "⚠️ TELEGRAM_CHAT_ID가 없습니다."
+        )
+
+        return False
+
     url = (
         "https://api.telegram.org/"
         f"bot{BOT_TOKEN}/sendMessage"
     )
 
-    # Telegram sendMessage 제한 대응
-    max_length = 4000
-
-    chunks = [
-        text[i:i + max_length]
-        for i in range(
-            0,
-            len(text),
-            max_length
-        )
-    ]
+    data = {
+        "chat_id": CHAT_ID,
+        "text": text,
+        "parse_mode": "HTML"
+    }
 
     try:
 
-        for i, chunk in enumerate(
-            chunks,
-            1
-        ):
+        response = requests.post(
+            url,
+            data=data,
+            timeout=30
+        )
 
-            data = {
-                "chat_id": CHAT_ID,
-                "text": chunk,
-                "parse_mode": "HTML"
-            }
+        print(
+            f"📨 Telegram: "
+            f"{response.status_code}"
+        )
 
-            response = requests.post(
-                url,
-                data=data,
-                timeout=30
-            )
+        if not response.ok:
 
-            print(
-                f"📨 Telegram "
-                f"{i}/{len(chunks)}: "
-                f"{response.status_code}"
-            )
+            print(response.text)
 
-            if not response.ok:
-
-                print(
-                    response.text
-                )
-
-                return False
-
-        return True
+        return response.ok
 
     except Exception as e:
 
@@ -1447,7 +1393,6 @@ def analyze_ticker(ticker):
     )
 
     if current_price is None:
-
         return None
 
     print("")
@@ -1520,7 +1465,7 @@ def analyze_ticker(ticker):
 
 
 # ============================================================
-# COMPATIBILITY RUN
+# COMPATIBILITY
 # ============================================================
 
 def run(ticker):
@@ -1530,7 +1475,6 @@ def run(ticker):
     )
 
     if result is None:
-
         return False
 
     return result["telegram_ok"]
@@ -1559,7 +1503,6 @@ def main():
     )
 
     if result is None:
-
         sys.exit(1)
 
     print("")
@@ -1567,10 +1510,6 @@ def main():
         "🔥 OPTION SEARCH 완료"
     )
 
-
-# ============================================================
-# RUN
-# ============================================================
 
 if __name__ == "__main__":
 
