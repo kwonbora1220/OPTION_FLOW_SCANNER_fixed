@@ -1,4 +1,3 @@
-
 import os
 import sys
 import time
@@ -37,13 +36,10 @@ BASE_DIR = os.path.dirname(
     os.path.abspath(__file__)
 )
 
-RESULT_DIR = os.path.abspath(
-    os.path.join(
-        BASE_DIR,
-        "..",
-        "03_RESULTS",
-        "daily"
-    )
+RESULT_DIR = os.path.join(
+    BASE_DIR,
+    "03_RESULTS",
+    "daily"
 )
 
 os.makedirs(
@@ -148,6 +144,7 @@ def get_option_data(ticker):
                 )
 
         except Exception:
+
             continue
 
     print(
@@ -470,7 +467,7 @@ def calculate_option_metrics(
     df["IV"] = iv_list
 
     # --------------------------------------------------------
-    # Premium
+    # PREMIUM
     # --------------------------------------------------------
 
     df["premium_flow"] = (
@@ -497,7 +494,7 @@ def calculate_option_metrics(
     ] *= -1
 
     # --------------------------------------------------------
-    # Delta Exposure
+    # DELTA EXPOSURE
     # --------------------------------------------------------
 
     df["delta_exposure"] = (
@@ -508,7 +505,7 @@ def calculate_option_metrics(
     )
 
     # --------------------------------------------------------
-    # Vanna
+    # VANNA
     # --------------------------------------------------------
 
     df["vanna_exposure"] = (
@@ -519,7 +516,7 @@ def calculate_option_metrics(
     )
 
     # --------------------------------------------------------
-    # Charm
+    # CHARM
     # --------------------------------------------------------
 
     df["charm_exposure"] = (
@@ -882,16 +879,19 @@ def build_structure_judgement(
 
     if delta > 0:
         score += 1
+
     elif delta < 0:
         score -= 1
 
     if hiro > 0:
         score += 1
+
     elif hiro < 0:
         score -= 1
 
     if gex > 0:
         score += 1
+
     elif gex < 0:
         score -= 1
 
@@ -991,19 +991,31 @@ def build_report(
 
     lines.append("")
 
-    lines.append(
-        f"📈 CALL WALL "
-        f"<b>${call_wall:g}</b>"
-        if call_wall is not None
-        else "📈 CALL WALL N/A"
-    )
+    if call_wall is not None:
 
-    lines.append(
-        f"📉 PUT WALL "
-        f"<b>${put_wall:g}</b>"
-        if put_wall is not None
-        else "📉 PUT WALL N/A"
-    )
+        lines.append(
+            f"📈 CALL WALL "
+            f"<b>${call_wall:g}</b>"
+        )
+
+    else:
+
+        lines.append(
+            "📈 CALL WALL N/A"
+        )
+
+    if put_wall is not None:
+
+        lines.append(
+            f"📉 PUT WALL "
+            f"<b>${put_wall:g}</b>"
+        )
+
+    else:
+
+        lines.append(
+            "📉 PUT WALL N/A"
+        )
 
     lines.append("")
 
@@ -1355,32 +1367,52 @@ def send_telegram(text):
         f"bot{BOT_TOKEN}/sendMessage"
     )
 
-    data = {
-        "chat_id": CHAT_ID,
-        "text": text,
-        "parse_mode": "HTML"
-    }
+    # Telegram sendMessage 제한 대응
+    max_length = 4000
+
+    chunks = [
+        text[i:i + max_length]
+        for i in range(
+            0,
+            len(text),
+            max_length
+        )
+    ]
 
     try:
 
-        response = requests.post(
-            url,
-            data=data,
-            timeout=30
-        )
+        for i, chunk in enumerate(
+            chunks,
+            1
+        ):
 
-        print(
-            f"📨 Telegram: "
-            f"{response.status_code}"
-        )
+            data = {
+                "chat_id": CHAT_ID,
+                "text": chunk,
+                "parse_mode": "HTML"
+            }
 
-        if not response.ok:
-
-            print(
-                response.text
+            response = requests.post(
+                url,
+                data=data,
+                timeout=30
             )
 
-        return response.ok
+            print(
+                f"📨 Telegram "
+                f"{i}/{len(chunks)}: "
+                f"{response.status_code}"
+            )
+
+            if not response.ok:
+
+                print(
+                    response.text
+                )
+
+                return False
+
+        return True
 
     except Exception as e:
 
@@ -1455,9 +1487,6 @@ def analyze_ticker(ticker):
 
     print("")
     print(report)
-
-    # CSV는 저장하지만
-    # 최종 분석은 이 df를 바로 사용한다.
 
     csv_file = save_option_csv(
         ticker,
@@ -1538,6 +1567,10 @@ def main():
         "🔥 OPTION SEARCH 완료"
     )
 
+
+# ============================================================
+# RUN
+# ============================================================
 
 if __name__ == "__main__":
 
