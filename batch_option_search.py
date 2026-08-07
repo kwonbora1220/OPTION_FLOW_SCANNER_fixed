@@ -1,3 +1,4 @@
+
 import os
 import time
 import pandas as pd
@@ -7,6 +8,7 @@ from selected_symbols import SELECTED_SYMBOLS
 from option_search import (
     run,
     calculate_aggregate_greeks,
+    get_current_price,
 )
 
 
@@ -18,6 +20,11 @@ TOP_ENTRY = 5
 
 ENTRY_SCORE = 70
 WATCH_SCORE = 40
+
+
+# ============================================================
+# PATH
+# ============================================================
 
 BASE_DIR = os.path.dirname(
     os.path.abspath(__file__)
@@ -54,7 +61,6 @@ def calculate_score(
 ):
 
     score = 50.0
-
     reasons = []
 
     calls = df[
@@ -65,8 +71,9 @@ def calculate_score(
         df["option_type"] == "PUT"
     ].copy()
 
+
     # ========================================================
-    # CALL / PUT PREMIUM
+    # PREMIUM
     # ========================================================
 
     if not calls.empty and not puts.empty:
@@ -94,7 +101,6 @@ def calculate_score(
             if call_ratio >= 0.60:
 
                 score += 10
-
                 reasons.append(
                     "Call Premium 강세"
                 )
@@ -102,7 +108,6 @@ def calculate_score(
             elif call_ratio >= 0.55:
 
                 score += 6
-
                 reasons.append(
                     "Call Premium 우세"
                 )
@@ -110,7 +115,6 @@ def calculate_score(
             elif call_ratio <= 0.40:
 
                 score -= 10
-
                 reasons.append(
                     "Put Premium 강세"
                 )
@@ -118,10 +122,10 @@ def calculate_score(
             elif call_ratio <= 0.45:
 
                 score -= 6
-
                 reasons.append(
                     "Put Premium 우세"
                 )
+
 
     # ========================================================
     # VOLUME
@@ -152,7 +156,6 @@ def calculate_score(
             if call_ratio >= 0.60:
 
                 score += 8
-
                 reasons.append(
                     "Call 거래량 우세"
                 )
@@ -160,10 +163,10 @@ def calculate_score(
             elif call_ratio <= 0.40:
 
                 score -= 8
-
                 reasons.append(
                     "Put 거래량 우세"
                 )
+
 
     # ========================================================
     # OPEN INTEREST
@@ -194,7 +197,6 @@ def calculate_score(
             if call_ratio >= 0.60:
 
                 score += 6
-
                 reasons.append(
                     "Call OI 우세"
                 )
@@ -202,10 +204,10 @@ def calculate_score(
             elif call_ratio <= 0.40:
 
                 score -= 6
-
                 reasons.append(
                     "Put OI 우세"
                 )
+
 
     # ========================================================
     # DTE
@@ -235,6 +237,7 @@ def calculate_score(
         (df["DTE"] <= 180)
     ]
 
+
     if (
         not dte_0_7.empty
         and dte_8_30.empty
@@ -248,6 +251,7 @@ def calculate_score(
             "초단기 DTE 집중"
         )
 
+
     if not dte_8_30.empty:
 
         score += 2
@@ -255,6 +259,7 @@ def calculate_score(
         reasons.append(
             "8~30DTE 구조"
         )
+
 
     if not dte_31_60.empty:
 
@@ -264,6 +269,7 @@ def calculate_score(
             "31~60DTE 구조"
         )
 
+
     if not dte_61_180.empty:
 
         score += 2
@@ -271,6 +277,7 @@ def calculate_score(
         reasons.append(
             "61~180DTE 구조"
         )
+
 
     long_calls = calls[
         calls["DTE"] >= 30
@@ -284,6 +291,7 @@ def calculate_score(
             "30D+ Call 구조 존재"
         )
 
+
     long_puts = puts[
         puts["DTE"] >= 30
     ]
@@ -293,6 +301,7 @@ def calculate_score(
         reasons.append(
             "30D+ Put 구조 존재"
         )
+
 
     # ========================================================
     # DELTA
@@ -337,6 +346,7 @@ def calculate_score(
             "Delta Exposure 하방"
         )
 
+
     # ========================================================
     # GEX
     # ========================================================
@@ -361,6 +371,7 @@ def calculate_score(
         reasons.append(
             "GEX Negative"
         )
+
 
     # ========================================================
     # HIRO
@@ -387,6 +398,7 @@ def calculate_score(
             "HIRO Proxy Negative"
         )
 
+
     # ========================================================
     # VANNA
     # ========================================================
@@ -412,6 +424,7 @@ def calculate_score(
             "Vanna 하방"
         )
 
+
     # ========================================================
     # IV
     # ========================================================
@@ -428,6 +441,7 @@ def calculate_score(
     except Exception:
 
         iv_pct = 0
+
 
     if iv_pct <= 40:
 
@@ -469,12 +483,14 @@ def calculate_score(
             "IV 극단적"
         )
 
+
     # ========================================================
     # SIGNAL CONFLICT
     # ========================================================
 
     bullish = 0
     bearish = 0
+
 
     if delta > 0:
 
@@ -484,6 +500,7 @@ def calculate_score(
 
         bearish += 1
 
+
     if gex > 0:
 
         bullish += 1
@@ -491,6 +508,7 @@ def calculate_score(
     elif gex < 0:
 
         bearish += 1
+
 
     if hiro > 0:
 
@@ -500,6 +518,7 @@ def calculate_score(
 
         bearish += 1
 
+
     if vanna > 0:
 
         bullish += 1
@@ -507,6 +526,7 @@ def calculate_score(
     elif vanna < 0:
 
         bearish += 1
+
 
     if (
         bullish >= 3
@@ -519,6 +539,7 @@ def calculate_score(
             "⚠️ Signal Conflict"
         )
 
+
     # ========================================================
     # LIMIT
     # ========================================================
@@ -530,6 +551,7 @@ def calculate_score(
             score
         )
     )
+
 
     # ========================================================
     # DIRECTION
@@ -554,6 +576,7 @@ def calculate_score(
     else:
 
         direction = "BEARISH"
+
 
     return (
         score,
@@ -580,19 +603,142 @@ def classify(score):
 
 
 # ============================================================
-# LOAD INDIVIDUAL OPTION SEARCH RESULT
+# WALL
 # ============================================================
 
-def load_individual_result(ticker):
+def find_walls(
+    df,
+    current_price
+):
+
+    active = df[
+        df["volume"] > 0
+    ].copy()
+
+
+    if active.empty:
+
+        return None, None
+
+
+    active["distance_pct"] = (
+        abs(
+            active["strike"]
+            - current_price
+        )
+        / current_price
+        * 100
+    )
+
+
+    active = active[
+        active["distance_pct"] <= 30
+    ].copy()
+
+
+    if active.empty:
+
+        return None, None
+
+
+    # ========================================================
+    # CALL WALL
+    # ========================================================
+
+    calls = active[
+        (
+            active["option_type"]
+            == "CALL"
+        )
+        &
+        (
+            active["strike"]
+            > current_price
+        )
+    ]
+
+
+    call_wall = None
+
+
+    if not calls.empty:
+
+        group = (
+            calls
+            .groupby("strike")["GEX"]
+            .sum()
+        )
+
+
+        if not group.empty:
+
+            call_wall = float(
+                group.idxmax()
+            )
+
+
+    # ========================================================
+    # PUT WALL
+    # ========================================================
+
+    puts = active[
+        (
+            active["option_type"]
+            == "PUT"
+        )
+        &
+        (
+            active["strike"]
+            < current_price
+        )
+    ]
+
+
+    put_wall = None
+
+
+    if not puts.empty:
+
+        group = (
+            puts
+            .groupby("strike")["GEX"]
+            .sum()
+        )
+
+
+        if not group.empty:
+
+            put_wall = float(
+                group.idxmin()
+            )
+
+
+    return (
+        call_wall,
+        put_wall
+    )
+
+
+# ============================================================
+# LOAD INDIVIDUAL CSV
+# ============================================================
+
+def load_individual_result(
+    ticker
+):
 
     filename = os.path.join(
         RESULT_DIR,
         f"{ticker}_OPTION_SEARCH.csv"
     )
 
-    if not os.path.exists(filename):
+
+    if not os.path.exists(
+        filename
+    ):
 
         return None
+
 
     try:
 
@@ -600,11 +746,14 @@ def load_individual_result(ticker):
             filename
         )
 
+
         if df.empty:
 
             return None
 
+
         return df
+
 
     except Exception as e:
 
@@ -616,36 +765,7 @@ def load_individual_result(ticker):
 
 
 # ============================================================
-# CURRENT PRICE
-# ============================================================
-
-def get_price_from_df(df):
-
-    try:
-
-        # OPTION SEARCH CSV에는
-        # strike 등이 있으므로
-        # 현재가는 별도 계산하지 않는다.
-        #
-        # 마지막으로 저장된 옵션의
-        # 현재가를 직접 가져올 수 없으므로
-        # option_search의 함수 사용
-
-        from option_search import (
-            get_current_price
-        )
-
-        return get_current_price(
-            df["_ticker"].iloc[0]
-        )
-
-    except Exception:
-
-        return None
-
-
-# ============================================================
-# INDIVIDUAL ANALYSIS
+# ANALYZE INDIVIDUAL CSV
 # ============================================================
 
 def analyze_individual_csv(
@@ -655,149 +775,104 @@ def analyze_individual_csv(
 
     try:
 
-        from option_search import (
-            get_current_price
-        )
-
         current_price = get_current_price(
             ticker
         )
+
 
         if current_price is None:
 
             return None
 
-        # ----------------------------------------------------
-        # option_search.py에서 이미 계산된 컬럼을
-        # 사용하는 구조
-        # ----------------------------------------------------
 
         greeks = calculate_aggregate_greeks(
             df
         )
 
-        score, direction, reasons = (
-            calculate_score(
-                df,
-                greeks,
-                current_price
-            )
+
+        (
+            score,
+            direction,
+            reasons
+        ) = calculate_score(
+            df,
+            greeks,
+            current_price
         )
+
 
         category = classify(
             score
         )
 
-        call_wall = None
-        put_wall = None
 
-        # ----------------------------------------------------
-        # CALL WALL
-        # ----------------------------------------------------
+        (
+            call_wall,
+            put_wall
+        ) = find_walls(
+            df,
+            current_price
+        )
 
-        active = df[
-            df["volume"] > 0
-        ].copy()
-
-        if not active.empty:
-
-            active["distance_pct"] = (
-                abs(
-                    active["strike"]
-                    - current_price
-                )
-                / current_price
-                * 100
-            )
-
-            active = active[
-                active["distance_pct"] <= 30
-            ].copy()
-
-        if not active.empty:
-
-            calls = active[
-                (
-                    active["option_type"]
-                    == "CALL"
-                )
-                &
-                (
-                    active["strike"]
-                    > current_price
-                )
-            ]
-
-            if not calls.empty:
-
-                group = (
-                    calls
-                    .groupby("strike")["GEX"]
-                    .sum()
-                )
-
-                if not group.empty:
-
-                    call_wall = float(
-                        group.idxmax()
-                    )
-
-            puts = active[
-                (
-                    active["option_type"]
-                    == "PUT"
-                )
-                &
-                (
-                    active["strike"]
-                    < current_price
-                )
-            ]
-
-            if not puts.empty:
-
-                group = (
-                    puts
-                    .groupby("strike")["GEX"]
-                    .sum()
-                )
-
-                if not group.empty:
-
-                    put_wall = float(
-                        group.idxmin()
-                    )
 
         return {
-            "ticker": ticker,
-            "current_price": current_price,
-            "score": score,
-            "direction": direction,
-            "category": category,
-            "reasons": reasons,
-            "delta": greeks.get(
-                "Delta",
-                0
-            ),
-            "gex": greeks.get(
-                "GEX",
-                0
-            ),
-            "hiro": greeks.get(
-                "HIRO",
-                0
-            ),
-            "vanna": greeks.get(
-                "Vanna",
-                0
-            ),
-            "iv": greeks.get(
-                "IV",
-                0
-            ),
-            "call_wall": call_wall,
-            "put_wall": put_wall
+
+            "ticker":
+                ticker,
+
+            "current_price":
+                current_price,
+
+            "score":
+                score,
+
+            "direction":
+                direction,
+
+            "category":
+                category,
+
+            "reasons":
+                reasons,
+
+            "delta":
+                greeks.get(
+                    "Delta",
+                    0
+                ),
+
+            "gex":
+                greeks.get(
+                    "GEX",
+                    0
+                ),
+
+            "hiro":
+                greeks.get(
+                    "HIRO",
+                    0
+                ),
+
+            "vanna":
+                greeks.get(
+                    "Vanna",
+                    0
+                ),
+
+            "iv":
+                greeks.get(
+                    "IV",
+                    0
+                ),
+
+            "call_wall":
+                call_wall,
+
+            "put_wall":
+                put_wall
+
         }
+
 
     except Exception as e:
 
@@ -812,14 +887,18 @@ def analyze_individual_csv(
 # SAVE FINAL CSV
 # ============================================================
 
-def save_ranking(results):
+def save_ranking(
+    results
+):
 
     rows = []
+
 
     for r in results:
 
         rows.append(
             {
+
                 "ticker":
                     r["ticker"],
 
@@ -860,8 +939,10 @@ def save_ranking(results):
 
                 "put_wall":
                     r["put_wall"]
+
             }
         )
+
 
     pd.DataFrame(
         rows
@@ -871,11 +952,13 @@ def save_ranking(results):
         encoding="utf-8-sig"
     )
 
+
     print("")
     print(
         f"💾 FINAL CSV 저장: "
         f"{RANKING_FILE}"
     )
+
 
     if os.path.exists(
         RANKING_FILE
@@ -886,13 +969,13 @@ def save_ranking(results):
         )
 
         print(
-            f"✅ CSV 생성 확인 "
+            f"✅ FINAL CSV 생성 확인 "
             f"({size:,} bytes)"
         )
 
 
 # ============================================================
-# BUILD FINAL TELEGRAM
+# BUILD FINAL MESSAGE
 # ============================================================
 
 def build_final_message(
@@ -900,6 +983,7 @@ def build_final_message(
 ):
 
     lines = []
+
 
     lines.append(
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -915,6 +999,7 @@ def build_final_message(
 
     lines.append("")
 
+
     # ========================================================
     # ENTRY
     # ========================================================
@@ -925,11 +1010,13 @@ def build_final_message(
         if x["score"] >= ENTRY_SCORE
     ][:TOP_ENTRY]
 
+
     lines.append(
         "🟢 오늘 진입 후보 TOP 5"
     )
 
     lines.append("")
+
 
     if entry:
 
@@ -944,6 +1031,7 @@ def build_final_message(
                 f"{r['score']:.1f}점 | "
                 f"{r['direction']}"
             )
+
 
             if r["reasons"]:
 
@@ -960,7 +1048,9 @@ def build_final_message(
             "오늘 진입 후보 없음"
         )
 
+
     lines.append("")
+
 
     # ========================================================
     # WATCH
@@ -976,11 +1066,13 @@ def build_final_message(
         )
     ]
 
+
     lines.append(
         "🟡 관망"
     )
 
     lines.append("")
+
 
     if watch:
 
@@ -998,7 +1090,9 @@ def build_final_message(
             "관망 종목 없음"
         )
 
+
     lines.append("")
+
 
     # ========================================================
     # AVOID
@@ -1010,11 +1104,13 @@ def build_final_message(
         if x["score"] < WATCH_SCORE
     ]
 
+
     lines.append(
         "🔴 회피"
     )
 
     lines.append("")
+
 
     if avoid:
 
@@ -1032,7 +1128,9 @@ def build_final_message(
             "회피 종목 없음"
         )
 
+
     lines.append("")
+
 
     # ========================================================
     # ALL RANKING
@@ -1052,6 +1150,7 @@ def build_final_message(
 
     lines.append("")
 
+
     for i, r in enumerate(
         results,
         1
@@ -1064,7 +1163,9 @@ def build_final_message(
             f"{r['category']}"
         )
 
+
     lines.append("")
+
 
     # ========================================================
     # TOP DETAIL
@@ -1084,6 +1185,7 @@ def build_final_message(
 
     lines.append("")
 
+
     if entry:
 
         for r in entry:
@@ -1093,12 +1195,14 @@ def build_final_message(
                 f"${r['current_price']:.2f}"
             )
 
+
             if r["call_wall"] is not None:
 
                 distance = (
                     r["call_wall"]
                     - r["current_price"]
                 ) / r["current_price"] * 100
+
 
                 lines.append(
                     f"📈 Call Wall "
@@ -1112,12 +1216,14 @@ def build_final_message(
                     "📈 Call Wall N/A"
                 )
 
+
             if r["put_wall"] is not None:
 
                 distance = (
                     r["current_price"]
                     - r["put_wall"]
                 ) / r["current_price"] * 100
+
 
                 lines.append(
                     f"📉 Put Wall "
@@ -1131,6 +1237,7 @@ def build_final_message(
                     "📉 Put Wall N/A"
                 )
 
+
             try:
 
                 iv_text = (
@@ -1141,11 +1248,13 @@ def build_final_message(
 
                 iv_text = "N/A"
 
+
             lines.append(
                 f"IV {iv_text}"
             )
 
             lines.append("")
+
 
     # ========================================================
     # FOOTER
@@ -1167,13 +1276,14 @@ def build_final_message(
         "⚠️ 옵션 거래량만으로 실제 BUY/SELL을 확정할 수 없습니다."
     )
 
+
     return "\n".join(
         lines
     )
 
 
 # ============================================================
-# TELEGRAM FINAL
+# FINAL TELEGRAM
 # ============================================================
 
 def send_final_telegram(
@@ -1186,9 +1296,11 @@ def send_final_telegram(
             send_telegram
         )
 
+
         ok = send_telegram(
             message
         )
+
 
         if ok:
 
@@ -1201,6 +1313,7 @@ def send_final_telegram(
             print(
                 "❌ FINAL Telegram 전송 실패"
             )
+
 
     except Exception as e:
 
@@ -1217,10 +1330,13 @@ def main():
 
     print("")
     print("=" * 70)
+
     print(
         "🔥 OPTION FLOW SCANNER V1"
     )
+
     print("=" * 70)
+
 
     print("")
     print(
@@ -1228,13 +1344,14 @@ def main():
         f"{len(SELECTED_SYMBOLS)}개"
     )
 
+
     print("")
     print(
         "📌 실행 순서:"
     )
 
     print(
-        "1. 개별 OPTION SEARCH"
+        "1. 개별 OPTION SEARCH 실행"
     )
 
     print(
@@ -1242,28 +1359,34 @@ def main():
     )
 
     print(
-        "3. 개별 CSV 저장"
+        "3. 개별 OPTION SEARCH CSV 저장"
     )
 
     print(
-        "4. 전체 종목 최종 Ranking"
+        "4. 전체 종목 완료"
     )
 
     print(
-        "5. OPTION_FINAL_RANKING.csv 저장"
+        "5. 최종 Ranking 계산"
     )
 
     print(
-        "6. 최종 Telegram 전송"
+        "6. OPTION_FINAL_RANKING.csv 저장"
+    )
+
+    print(
+        "7. 최종 Telegram 전송"
     )
 
     print("")
 
+
     results = []
+
 
     # ========================================================
     # STEP 1
-    # 개별 종목 OPTION SEARCH
+    # 개별 OPTION SEARCH
     # ========================================================
 
     for i, ticker in enumerate(
@@ -1276,6 +1399,7 @@ def main():
             .upper()
             .strip()
         )
+
 
         print("")
         print("=" * 70)
@@ -1291,32 +1415,30 @@ def main():
 
         print("=" * 70)
 
+
         try:
 
-            # ------------------------------------------------
+            # =================================================
             # 핵심
             #
-            # option_search.py의 run(ticker)를 호출한다.
+            # 여기서 option_search.py의 run(ticker)를
+            # 직접 실행한다.
             #
-            # 여기서:
+            # run() 내부에서:
             #
-            # 현재가 조회
-            # ↓
-            # 옵션 전체 만기 수집
-            # ↓
-            # Greeks/GEX 계산
-            # ↓
-            # OPTION SEARCH 리포트 생성
-            # ↓
-            # 개별 Telegram 전송
-            # ↓
-            # {TICKER}_OPTION_SEARCH.csv 저장
+            # 현재가
+            # → 전체 옵션 만기
+            # → Greeks/GEX
+            # → 개별 OPTION SEARCH 리포트
+            # → 개별 Telegram
+            # → TICKER_OPTION_SEARCH.csv
             #
-            # ------------------------------------------------
+            # =================================================
 
             telegram_ok = run(
                 ticker
             )
+
 
             if telegram_ok:
 
@@ -1329,8 +1451,10 @@ def main():
 
                 print(
                     f"⚠️ {ticker} "
-                    "분석은 완료되었으나 Telegram 확인 필요"
+                    "OPTION SEARCH는 실행됐지만 "
+                    "Telegram 결과 확인 필요"
                 )
+
 
         except Exception as e:
 
@@ -1346,14 +1470,16 @@ def main():
 
             continue
 
-        # ----------------------------------------------------
-        # 개별 CSV 확인
-        # ----------------------------------------------------
+
+        # ====================================================
+        # 개별 CSV 존재 확인
+        # ====================================================
 
         csv_file = os.path.join(
             RESULT_DIR,
             f"{ticker}_OPTION_SEARCH.csv"
         )
+
 
         if not os.path.exists(
             csv_file
@@ -1361,21 +1487,26 @@ def main():
 
             print("")
             print(
-                f"❌ {ticker} "
-                "개별 CSV가 없습니다."
+                f"❌ {ticker}_OPTION_SEARCH.csv "
+                "생성되지 않았습니다."
             )
 
             continue
 
+
         print("")
         print(
-            f"✅ 개별 CSV 확인: "
-            f"{csv_file}"
+            f"✅ 개별 CSV 확인:"
         )
 
-        # ----------------------------------------------------
-        # CSV 다시 읽기
-        # ----------------------------------------------------
+        print(
+            f"   {csv_file}"
+        )
+
+
+        # ====================================================
+        # CSV LOAD
+        # ====================================================
 
         try:
 
@@ -1383,59 +1514,63 @@ def main():
                 csv_file
             )
 
+
             if df.empty:
 
                 print(
-                    f"⚠️ {ticker} "
-                    "CSV가 비어 있습니다."
+                    f"⚠️ {ticker} CSV가 비어 있습니다."
                 )
 
                 continue
 
-            # ------------------------------------------------
-            # FINAL SCORE
-            # ------------------------------------------------
-
-            final_result = (
-                analyze_individual_csv(
-                    ticker,
-                    df
-                )
-            )
-
-            if final_result:
-
-                results.append(
-                    final_result
-                )
-
-                print("")
-                print(
-                    f"🎯 {ticker} "
-                    f"최종 점수: "
-                    f"{final_result['score']:.1f}"
-                )
-
-                print(
-                    f"   방향: "
-                    f"{final_result['direction']}"
-                )
-
-                print(
-                    f"   판정: "
-                    f"{final_result['category']}"
-                )
 
         except Exception as e:
 
             print(
-                f"❌ {ticker} "
-                f"최종 점수 계산 실패: {e}"
+                f"❌ {ticker} CSV 읽기 실패: {e}"
             )
 
-        # ----------------------------------------------------
-        # 다음 종목
-        # ----------------------------------------------------
+            continue
+
+
+        # ====================================================
+        # FINAL SCORE
+        # ====================================================
+
+        final_result = analyze_individual_csv(
+            ticker,
+            df
+        )
+
+
+        if final_result:
+
+            results.append(
+                final_result
+            )
+
+
+            print("")
+
+            print(
+                f"🎯 {ticker} 최종 점수: "
+                f"{final_result['score']:.1f}"
+            )
+
+            print(
+                f"   방향: "
+                f"{final_result['direction']}"
+            )
+
+            print(
+                f"   판정: "
+                f"{final_result['category']}"
+            )
+
+
+        # ====================================================
+        # NEXT
+        # ====================================================
 
         if i < len(
             SELECTED_SYMBOLS
@@ -1448,23 +1583,28 @@ def main():
 
             time.sleep(3)
 
+
     # ========================================================
     # STEP 2
-    # ALL RESULT CHECK
+    # ALL INDIVIDUAL SEARCH FINISHED
     # ========================================================
 
     print("")
     print("=" * 70)
+
     print(
-        "📊 ALL INDIVIDUAL SEARCH FINISHED"
+        "📊 ALL INDIVIDUAL OPTION SEARCH FINISHED"
     )
+
     print("=" * 70)
+
 
     print("")
     print(
         f"✅ 분석 완료 종목: "
         f"{len(results)}"
     )
+
 
     if not results:
 
@@ -1474,6 +1614,7 @@ def main():
         )
 
         raise SystemExit(1)
+
 
     # ========================================================
     # STEP 3
@@ -1486,6 +1627,7 @@ def main():
         reverse=True
     )
 
+
     # ========================================================
     # STEP 4
     # FINAL CSV
@@ -1493,14 +1635,18 @@ def main():
 
     print("")
     print("=" * 70)
+
     print(
         "💾 FINAL RANKING CSV"
     )
+
     print("=" * 70)
+
 
     save_ranking(
         results
     )
+
 
     # ========================================================
     # STEP 5
@@ -1509,21 +1655,24 @@ def main():
 
     print("")
     print("=" * 70)
+
     print(
         "🧠 FINAL OPTION RANKING"
     )
+
     print("=" * 70)
 
-    final_message = (
-        build_final_message(
-            results
-        )
+
+    final_message = build_final_message(
+        results
     )
+
 
     print("")
     print(
         final_message
     )
+
 
     # ========================================================
     # STEP 6
@@ -1532,14 +1681,18 @@ def main():
 
     print("")
     print("=" * 70)
+
     print(
         "📱 FINAL TELEGRAM"
     )
+
     print("=" * 70)
+
 
     send_final_telegram(
         final_message
     )
+
 
     # ========================================================
     # DONE
@@ -1547,10 +1700,13 @@ def main():
 
     print("")
     print("=" * 70)
+
     print(
         "🔥 OPTION FLOW SCANNER V1 COMPLETE"
     )
+
     print("=" * 70)
+
 
     print("")
     print(
