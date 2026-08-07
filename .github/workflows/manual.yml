@@ -1,4 +1,4 @@
-```yaml
+
 name: OPTION FLOW SCANNER V1
 
 on:
@@ -192,4 +192,4 @@ jobs:
           echo "✅ CSV 생성"
           echo "✅ Telegram 전송"
           echo "=========================================="
-```
+
