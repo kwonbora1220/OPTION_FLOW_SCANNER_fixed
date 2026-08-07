@@ -14,7 +14,7 @@ BOT_TOKEN = os.environ.get(
 
 CHAT_ID = os.environ.get(
     "TELEGRAM_CHAT_ID",
-    "7729872113"
+    ""
 )
 
 
@@ -22,16 +22,20 @@ CHAT_ID = os.environ.get(
 # RESULT FILE
 # ============================================================
 
-BASE_DIR = os.path.dirname(
-    os.path.abspath(__file__)
-)
+def find_result_file():
 
-RESULT_FILE = os.path.join(
-    BASE_DIR,
-    "03_RESULTS",
-    "daily",
-    "OPTION_FINAL_RANKING.csv"
-)
+    target = "OPTION_FINAL_RANKING.csv"
+
+    for root, dirs, files in os.walk("."):
+
+        if target in files:
+
+            return os.path.join(
+                root,
+                target
+            )
+
+    return None
 
 
 # ============================================================
@@ -46,34 +50,30 @@ def send_message(text):
             "TELEGRAM_BOT_TOKEN이 없습니다."
         )
 
+    if not CHAT_ID:
+
+        raise RuntimeError(
+            "TELEGRAM_CHAT_ID가 없습니다."
+        )
+
     url = (
         "https://api.telegram.org/"
         f"bot{BOT_TOKEN}/sendMessage"
     )
 
-    max_length = 4000
+    response = requests.post(
 
-    chunks = [
-        text[i:i + max_length]
-        for i in range(
-            0,
-            len(text),
-            max_length
-        )
-    ]
+        url,
 
-    for chunk in chunks:
+        data={
+            "chat_id": CHAT_ID,
+            "text": text
+        },
 
-        response = requests.post(
-            url,
-            data={
-                "chat_id": CHAT_ID,
-                "text": chunk
-            },
-            timeout=30
-        )
+        timeout=30
+    )
 
-        response.raise_for_status()
+    response.raise_for_status()
 
 
 # ============================================================
@@ -91,61 +91,45 @@ def main():
     if not BOT_TOKEN:
 
         print(
-            "❌ TELEGRAM_BOT_TOKEN이 설정되지 않았습니다."
+            "❌ TELEGRAM_BOT_TOKEN 없음"
+        )
+
+        raise SystemExit(1)
+
+    if not CHAT_ID:
+
+        print(
+            "❌ TELEGRAM_CHAT_ID 없음"
         )
 
         raise SystemExit(1)
 
     print(
-        "✅ Telegram Bot Token 확인"
+        "✅ Telegram 환경변수 확인"
     )
 
-    # --------------------------------------------------------
-    # RESULT FILE
-    # --------------------------------------------------------
+    result_file = find_result_file()
 
-    if not os.path.isfile(
-        RESULT_FILE
-    ):
+    if not result_file:
 
         print(
-            "❌ OPTION_FINAL_RANKING.csv를 찾을 수 없습니다."
-        )
-
-        print("")
-        print(
-            f"찾는 위치: {RESULT_FILE}"
+            "❌ OPTION_FINAL_RANKING.csv 없음"
         )
 
         raise SystemExit(1)
 
     print(
-        f"✅ 결과 파일 발견: {RESULT_FILE}"
+        f"✅ 결과 파일: {result_file}"
     )
-
-    # --------------------------------------------------------
-    # LOAD
-    # --------------------------------------------------------
 
     df = pd.read_csv(
-        RESULT_FILE
+        result_file
     )
 
-    if df.empty:
-
-        print(
-            "❌ 결과 CSV가 비어 있습니다."
-        )
-
-        raise SystemExit(1)
-
-    print(
-        f"📊 종목 수: {len(df)}"
+    df = df.sort_values(
+        "score",
+        ascending=False
     )
-
-    # --------------------------------------------------------
-    # RANKING
-    # --------------------------------------------------------
 
     message = (
         "🔥 OPTION FLOW SCANNER V1\n\n"
@@ -162,10 +146,7 @@ def main():
         ticker = str(
             row.get(
                 "ticker",
-                row.get(
-                    "symbol",
-                    "UNKNOWN"
-                )
+                "UNKNOWN"
             )
         )
 
@@ -205,124 +186,9 @@ def main():
     )
 
     print(
-        "✅ 전체 순위 Telegram 전송 완료"
+        "✅ Telegram 전송 완료"
     )
 
-    # --------------------------------------------------------
-    # TOP 5
-    # --------------------------------------------------------
-
-    detail = (
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "🎯 TOP 5 구조 상세\n"
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-    )
-
-    for _, row in df.head(5).iterrows():
-
-        ticker = str(
-            row.get(
-                "ticker",
-                "UNKNOWN"
-            )
-        )
-
-        price = row.get(
-            "current_price",
-            "-"
-        )
-
-        call_wall = row.get(
-            "call_wall",
-            "-"
-        )
-
-        put_wall = row.get(
-            "put_wall",
-            "-"
-        )
-
-        iv = row.get(
-            "iv",
-            "-"
-        )
-
-        try:
-
-            price_text = (
-                f"${float(price):.2f}"
-            )
-
-        except Exception:
-
-            price_text = str(price)
-
-        try:
-
-            call_text = (
-                f"${float(call_wall):g}"
-            )
-
-        except Exception:
-
-            call_text = str(call_wall)
-
-        try:
-
-            put_text = (
-                f"${float(put_wall):g}"
-            )
-
-        except Exception:
-
-            put_text = str(put_wall)
-
-        try:
-
-            iv_value = float(iv)
-
-            if iv_value < 5:
-
-                iv_text = (
-                    f"{iv_value * 100:.1f}%"
-                )
-
-            else:
-
-                iv_text = (
-                    f"{iv_value:.1f}%"
-                )
-
-        except Exception:
-
-            iv_text = str(iv)
-
-        detail += (
-            f"📌 {ticker} {price_text}\n"
-            f"📈 Call Wall: {call_text}\n"
-            f"📉 Put Wall: {put_text}\n"
-            f"IV: {iv_text}\n\n"
-        )
-
-    send_message(
-        detail
-    )
-
-    print(
-        "✅ TOP 5 상세 Telegram 전송 완료"
-    )
-
-    print("")
-    print("=" * 70)
-    print(
-        "🔥 TELEGRAM V1 완료"
-    )
-    print("=" * 70)
-
-
-# ============================================================
-# RUN
-# ============================================================
 
 if __name__ == "__main__":
 
