@@ -7,27 +7,56 @@ import pandas as pd
 # ============================================================
 
 BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
-CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
-RESULT_FILE = os.path.join(
-    "03_RESULTS",
-    "daily",
-    "OPTION_FINAL_RANKING.csv"
-)
+# 실제 Telegram Chat ID
+CHAT_ID = "7729872113"
+
+# ============================================================
+# RESULT FILE SEARCH
+# ============================================================
+
+def find_result_file():
+
+    target = "OPTION_FINAL_RANKING.csv"
+
+    for root, dirs, files in os.walk("."):
+
+        if target in files:
+
+            return os.path.join(
+                root,
+                target
+            )
+
+    return None
+
 
 # ============================================================
 # TELEGRAM
 # ============================================================
 
 def send_message(text):
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+
+    if not BOT_TOKEN:
+
+        raise RuntimeError(
+            "TELEGRAM_BOT_TOKEN이 없습니다."
+        )
+
+    url = (
+        f"https://api.telegram.org/"
+        f"bot{BOT_TOKEN}/sendMessage"
+    )
 
     response = requests.post(
+
         url,
+
         data={
             "chat_id": CHAT_ID,
             "text": text
         },
+
         timeout=30
     )
 
@@ -44,18 +73,65 @@ def main():
     print("📱 TELEGRAM V1 RESULT SENDER")
     print("=" * 70)
 
+    # --------------------------------------------------------
+    # TOKEN
+    # --------------------------------------------------------
+
     if not BOT_TOKEN:
-        print("❌ TELEGRAM_BOT_TOKEN이 설정되지 않았습니다.")
-        return
 
-    if not os.path.exists(RESULT_FILE):
-        print(f"❌ 결과 파일이 없습니다: {RESULT_FILE}")
-        return
+        print(
+            "❌ TELEGRAM_BOT_TOKEN이 설정되지 않았습니다."
+        )
 
-    df = pd.read_csv(RESULT_FILE)
+        raise SystemExit(1)
 
-    print(f"📊 결과 파일: {RESULT_FILE}")
-    print(f"📊 종목 수: {len(df)}")
+    print("✅ Telegram Bot Token 확인")
+
+    # --------------------------------------------------------
+    # RESULT FILE SEARCH
+    # --------------------------------------------------------
+
+    result_file = find_result_file()
+
+    if not result_file:
+
+        print(
+            "❌ OPTION_FINAL_RANKING.csv를 찾을 수 없습니다."
+        )
+
+        print("")
+        print("현재 저장소의 CSV 파일:")
+
+        for root, dirs, files in os.walk("."):
+
+            for file in files:
+
+                if file.endswith(".csv"):
+
+                    print(
+                        os.path.join(
+                            root,
+                            file
+                        )
+                    )
+
+        raise SystemExit(1)
+
+    print(
+        f"✅ 결과 파일 발견: {result_file}"
+    )
+
+    # --------------------------------------------------------
+    # CSV LOAD
+    # --------------------------------------------------------
+
+    df = pd.read_csv(
+        result_file
+    )
+
+    print(
+        f"📊 종목 수: {len(df)}"
+    )
 
     # --------------------------------------------------------
     # 전체 순위
@@ -68,36 +144,63 @@ def main():
         "━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
     )
 
-    for i, (_, row) in enumerate(df.head(20).iterrows(), 1):
+    for i, (_, row) in enumerate(
+        df.head(20).iterrows(),
+        1
+    ):
 
         ticker = str(
-            row.get("symbol",
-            row.get("ticker", "UNKNOWN"))
+            row.get(
+                "ticker",
+                row.get(
+                    "symbol",
+                    "UNKNOWN"
+                )
+            )
         )
 
         score = row.get(
             "score",
-            row.get("final_score", 0)
+            0
         )
 
         try:
+
             score = float(score)
+
         except:
+
             score = 0
 
-        if score >= 80:
+        if score >= 70:
+
             status = "🟢 오늘 진입 후보"
-        elif score >= 60:
+
+        elif score >= 40:
+
             status = "🟡 관망"
+
         else:
+
             status = "🔴 회피"
 
         message += (
             f"{i}. {ticker:<6} "
-            f"{score:.1f}점 {status}\n"
+            f"{score:.1f}점 "
+            f"{status}\n"
         )
 
-    send_message(message)
+    # --------------------------------------------------------
+    # Telegram 전송
+    # --------------------------------------------------------
+
+    send_message(
+        message
+    )
+
+    print(
+        "✅ 전체 순위 Telegram 전송 완료"
+    )
 
     # --------------------------------------------------------
     # TOP 5 상세
@@ -112,42 +215,80 @@ def main():
     for _, row in df.head(5).iterrows():
 
         ticker = str(
-            row.get("symbol",
-            row.get("ticker", "UNKNOWN"))
+            row.get(
+                "ticker",
+                row.get(
+                    "symbol",
+                    "UNKNOWN"
+                )
+            )
         )
 
         price = row.get(
             "current_price",
-            row.get("price", "-")
+            "-"
         )
 
         call_wall = row.get(
             "call_wall",
-            row.get("Call Wall", "-")
+            "-"
         )
 
         put_wall = row.get(
             "put_wall",
-            row.get("Put Wall", "-")
+            "-"
         )
 
         iv = row.get(
             "iv",
-            row.get("IV", "-")
+            "-"
         )
+
+        try:
+
+            iv_value = float(iv)
+
+            if iv_value < 5:
+
+                iv_text = (
+                    f"{iv_value * 100:.1f}%"
+                )
+
+            else:
+
+                iv_text = (
+                    f"{iv_value:.1f}%"
+                )
+
+        except:
+
+            iv_text = str(iv)
 
         detail += (
             f"📌 {ticker} ${price}\n"
             f"📈 Call Wall: ${call_wall}\n"
             f"📉 Put Wall: ${put_wall}\n"
-            f"IV: {iv}%\n\n"
+            f"IV: {iv_text}\n\n"
         )
 
-    send_message(detail)
+    send_message(
+        detail
+    )
+
+    print(
+        "✅ TOP 5 상세 Telegram 전송 완료"
+    )
 
     print("")
-    print("✅ Telegram V1 결과 전송 완료")
+    print("=" * 70)
+    print("🔥 TELEGRAM V1 완료")
+    print("=" * 70)
 
+
+# ============================================================
+# RUN
+# ============================================================
 
 if __name__ == "__main__":
+
     main()
