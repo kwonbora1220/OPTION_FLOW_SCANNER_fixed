@@ -1522,22 +1522,42 @@ except Exception as e:
 BASE_DIR = os.path.dirname(
     os.path.abspath(__file__)
 )
+# ============================================================
+# CSV RESULT SAVE
+# ============================================================
 
-out_dir = os.path.join(
+print("")
+print("=" * 70)
+print("💾 CSV RESULT SAVE")
+print("=" * 70)
+
+# batch_option_search.py가 있는 현재 폴더
+BASE_DIR = os.path.dirname(
+    os.path.abspath(__file__)
+)
+
+# GitHub 저장소 안에 결과 폴더 생성
+OUT_DIR = os.path.join(
     BASE_DIR,
     "03_RESULTS",
     "daily"
 )
 
+# 폴더가 없으면 자동 생성
 os.makedirs(
-    out_dir,
+    OUT_DIR,
     exist_ok=True
 )
 
-ranking_file = os.path.join(
-    out_dir,
+# 최종 CSV 파일
+RANKING_FILE = os.path.join(
+    OUT_DIR,
     "OPTION_FINAL_RANKING.csv"
 )
+
+# ------------------------------------------------------------
+# CSV 데이터 생성
+# ------------------------------------------------------------
 
 ranking_rows = []
 
@@ -1545,77 +1565,61 @@ for r in results:
 
     ranking_rows.append(
         {
-            "ticker":
-                r["ticker"],
-
-            "current_price":
-                r["current_price"],
-
-            "score":
-                r["score"],
-
-            "direction":
-                r["direction"],
-
-            "category":
-                r["category"],
-
-            "reasons":
-                " | ".join(
-                    r["reasons"]
-                ),
-
-            "delta":
-                r["delta"],
-
-            "gex":
-                r["gex"],
-
-            "hiro":
-                r["hiro"],
-
-            "vanna":
-                r["vanna"],
-
-            "iv":
-                r["iv"],
-
-            "call_wall":
-                r["call_wall"],
-
-            "put_wall":
-                r["put_wall"],
+            "ticker": r["ticker"],
+            "current_price": r["current_price"],
+            "score": r["score"],
+            "direction": r["direction"],
+            "category": r["category"],
+            "reasons": " | ".join(r["reasons"]),
+            "delta": r["delta"],
+            "gex": r["gex"],
+            "hiro": r["hiro"],
+            "vanna": r["vanna"],
+            "iv": r["iv"],
+            "call_wall": r["call_wall"],
+            "put_wall": r["put_wall"],
         }
     )
+
+# ------------------------------------------------------------
+# CSV 저장
+# ------------------------------------------------------------
 
 pd.DataFrame(
     ranking_rows
 ).to_csv(
-    ranking_file,
+    RANKING_FILE,
     index=False,
     encoding="utf-8-sig"
 )
 
-print("")
-
-print(
-    f"💾 최종 순위 저장: "
-    f"{ranking_file}"
-)
+# ------------------------------------------------------------
+# 실제 파일 생성 확인
+# ------------------------------------------------------------
 
 print("")
-
 print(
-    "=" * 70
+    f"💾 최종 순위 저장: {RANKING_FILE}"
 )
 
-print(
-    "🔥 FIXED OPTION SEARCH 완료"
-)
+if os.path.exists(RANKING_FILE):
 
-print(
-    "=" * 70
-)
-```
+    file_size = os.path.getsize(
+        RANKING_FILE
+    )
 
+    print(
+        f"✅ CSV 생성 확인: "
+        f"{file_size:,} bytes"
+    )
 
+else:
+
+    print(
+        "❌ CSV 생성 실패"
+    )
+
+print("")
+print("=" * 70)
+print("🔥 FIXED OPTION SEARCH 완료")
+print("=" * 70)
