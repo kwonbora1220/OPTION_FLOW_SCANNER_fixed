@@ -35,6 +35,7 @@ WALL_RANGE_PCT = 30
 # ATM IV 범위
 ATM_RANGE_PCT = 5
 
+
 # ============================================================
 # FORMAT MONEY
 # ============================================================
@@ -42,26 +43,41 @@ ATM_RANGE_PCT = 5
 def format_money(x):
 
     try:
+
         x = float(x)
+
     except Exception:
+
         return "$0"
 
     sign = ""
 
     if x < 0:
+
         sign = "-"
         x = abs(x)
 
     if x >= 1_000_000_000:
-        return f"{sign}${x / 1_000_000_000:.2f}B"
+
+        return (
+            f"{sign}${x / 1_000_000_000:.2f}B"
+        )
 
     if x >= 1_000_000:
-        return f"{sign}${x / 1_000_000:.2f}M"
+
+        return (
+            f"{sign}${x / 1_000_000:.2f}M"
+        )
 
     if x >= 1_000:
-        return f"{sign}${x / 1_000:.1f}K"
 
-    return f"{sign}${x:.0f}"
+        return (
+            f"{sign}${x / 1_000:.1f}K"
+        )
+
+    return (
+        f"{sign}${x:.0f}"
+    )
 
 
 # ============================================================
