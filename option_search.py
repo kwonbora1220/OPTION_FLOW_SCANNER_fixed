@@ -1446,6 +1446,10 @@ ENTRY_RESISTANCE_PCT = 3.0
 HOLDING_SUPPORT_BUFFER_PCT = 2.0
 
 
+# ============================================================
+# STRUCTURE LOCATION
+# ============================================================
+
 def get_structure_location(
     current_price,
     walls
@@ -1489,7 +1493,7 @@ def get_structure_location(
 
 
 # ============================================================
-# 구조 해석
+# STRUCTURE INTERPRETATION
 # ============================================================
 
 def build_structure_interpretation(
@@ -1497,6 +1501,12 @@ def build_structure_interpretation(
     walls,
     greeks
 ):
+    """
+    옵션 가격 구조를 사람이 읽을 수 있는 문장으로 변환한다.
+
+    독립적인 신규 진입 / 보유 판단과 별개로
+    '현재 옵션 구조가 무엇을 의미하는가'만 설명한다.
+    """
 
     put_wall = walls.get("put_wall")
     call_wall = walls.get("call_wall")
@@ -1519,21 +1529,23 @@ def build_structure_interpretation(
     )
 
     # --------------------------------------------------------
-    # 가격 위치
+    # PRICE STRUCTURE
     # --------------------------------------------------------
 
     if location == "BELOW_PUT_WALL":
 
         price_text = (
             f"현재 가격은 Put Wall "
-            f"${put_wall:g} 아래에 있습니다."
+            f"${put_wall:g} 아래에 있습니다. "
+            "핵심 하방 지지 가격을 이탈한 상태입니다."
         )
 
     elif location == "ABOVE_CALL_WALL":
 
         price_text = (
             f"현재 가격은 Call Wall "
-            f"${call_wall:g} 위에 있습니다."
+            f"${call_wall:g} 위에 있습니다. "
+            "상방 핵심 가격대를 돌파한 상태입니다."
         )
 
     elif location == "BETWEEN_WALLS":
@@ -1541,28 +1553,31 @@ def build_structure_interpretation(
         price_text = (
             f"현재 가격은 Put Wall "
             f"${put_wall:g}과 Call Wall "
-            f"${call_wall:g} 사이에 있습니다."
+            f"${call_wall:g} 사이에 있습니다. "
+            "현재 구간은 옵션 핵심 가격대 사이의 중간 영역입니다."
         )
 
     elif location == "ABOVE_PUT_WALL_ONLY":
 
         price_text = (
             f"현재 가격은 Put Wall "
-            f"${put_wall:g} 위에 있습니다."
+            f"${put_wall:g} 위에 있습니다. "
+            "하방 핵심 지지는 유지되고 있습니다."
         )
 
     elif location == "BELOW_CALL_WALL_ONLY":
 
         price_text = (
             f"현재 가격은 Call Wall "
-            f"${call_wall:g} 아래에 있습니다."
+            f"${call_wall:g} 아래에 있습니다. "
+            "상방 저항 가격을 아직 돌파하지 못했습니다."
         )
 
     else:
 
         price_text = (
             "현재 옵션 핵심 가격대가 "
-            "뚜렷하지 않습니다."
+            "뚜렷하게 확인되지 않습니다."
         )
 
     # --------------------------------------------------------
@@ -1572,15 +1587,13 @@ def build_structure_interpretation(
     if gex > 0:
 
         gex_text = (
-            "GEX는 양(+)으로 가격 안정화 "
-            "성격이 강합니다."
+            "GEX는 양(+)으로 가격 안정화 성격이 강합니다."
         )
 
     elif gex < 0:
 
         gex_text = (
-            "GEX는 음(-)으로 가격 변동성 "
-            "확대 가능성이 있습니다."
+            "GEX는 음(-)으로 가격 변동성 확대 가능성이 있습니다."
         )
 
     else:
@@ -1590,7 +1603,7 @@ def build_structure_interpretation(
         )
 
     # --------------------------------------------------------
-    # Delta
+    # DELTA
     # --------------------------------------------------------
 
     if delta > 0:
@@ -1642,7 +1655,7 @@ def build_structure_interpretation(
 
 
 # ============================================================
-# 신규 진입 판단
+# NEW ENTRY JUDGEMENT
 # ============================================================
 
 def judge_new_entry(
@@ -1658,7 +1671,7 @@ def judge_new_entry(
         🟡 확인 후 진입
         🔴 진입 금지
 
-    IMPORTANT:
+    중요:
     보유 판단과 완전히 독립적으로 실행한다.
     """
 
@@ -1678,7 +1691,7 @@ def judge_new_entry(
     )
 
     # --------------------------------------------------------
-    # 핵심 가격대 없음
+    # NO WALL
     # --------------------------------------------------------
 
     if (
@@ -1695,7 +1708,7 @@ def judge_new_entry(
         }
 
     # --------------------------------------------------------
-    # Put Wall 하향 이탈
+    # BELOW PUT WALL
     # --------------------------------------------------------
 
     if (
@@ -1713,7 +1726,7 @@ def judge_new_entry(
         }
 
     # --------------------------------------------------------
-    # Call Wall 돌파
+    # ABOVE CALL WALL
     # --------------------------------------------------------
 
     if (
@@ -1746,7 +1759,7 @@ def judge_new_entry(
         }
 
     # --------------------------------------------------------
-    # Call Wall 바로 아래
+    # BELOW CALL WALL
     # --------------------------------------------------------
 
     if call_wall is not None:
@@ -1776,7 +1789,7 @@ def judge_new_entry(
             }
 
     # --------------------------------------------------------
-    # Put Wall 위 + 긍정 흐름
+    # ABOVE PUT WALL + POSITIVE FLOW
     # --------------------------------------------------------
 
     if (
@@ -1796,7 +1809,7 @@ def judge_new_entry(
         }
 
     # --------------------------------------------------------
-    # 기본
+    # DEFAULT
     # --------------------------------------------------------
 
     return {
@@ -1809,7 +1822,7 @@ def judge_new_entry(
 
 
 # ============================================================
-# 보유 판단
+# HOLDING JUDGEMENT
 # ============================================================
 
 def judge_holding(
@@ -1826,7 +1839,7 @@ def judge_holding(
         🟠 축소검토
         🔴 이탈검토
 
-    IMPORTANT:
+    중요:
     신규 진입 판단과 완전히 독립적으로 실행한다.
     """
 
@@ -1846,7 +1859,7 @@ def judge_holding(
     )
 
     # --------------------------------------------------------
-    # Put Wall 하향 이탈
+    # BELOW PUT WALL
     # --------------------------------------------------------
 
     if (
@@ -1864,7 +1877,7 @@ def judge_holding(
         }
 
     # --------------------------------------------------------
-    # Put Wall 근처
+    # NEAR PUT WALL
     # --------------------------------------------------------
 
     if put_wall is not None:
@@ -1894,7 +1907,7 @@ def judge_holding(
             }
 
     # --------------------------------------------------------
-    # Call Wall 근처
+    # NEAR CALL WALL
     # --------------------------------------------------------
 
     if call_wall is not None:
@@ -1924,7 +1937,7 @@ def judge_holding(
             }
 
     # --------------------------------------------------------
-    # Delta + HIRO 동시 악화
+    # DELTA + HIRO BOTH NEGATIVE
     # --------------------------------------------------------
 
     if (
@@ -1941,7 +1954,7 @@ def judge_holding(
         }
 
     # --------------------------------------------------------
-    # 음의 GEX + 약한 방향성
+    # NEGATIVE GEX + WEAK DIRECTION
     # --------------------------------------------------------
 
     if (
@@ -1961,7 +1974,7 @@ def judge_holding(
         }
 
     # --------------------------------------------------------
-    # 지지 위 + 긍정 흐름
+    # ABOVE PUT WALL + POSITIVE FLOW
     # --------------------------------------------------------
 
     if (
@@ -1980,7 +1993,7 @@ def judge_holding(
         }
 
     # --------------------------------------------------------
-    # GEX 양수 + 지지 위
+    # POSITIVE GEX + ABOVE SUPPORT
     # --------------------------------------------------------
 
     if (
@@ -1998,7 +2011,7 @@ def judge_holding(
         }
 
     # --------------------------------------------------------
-    # 기본
+    # DEFAULT
     # --------------------------------------------------------
 
     return {
@@ -2011,7 +2024,7 @@ def judge_holding(
 
 
 # ============================================================
-# 나의 정리
+# MY SUMMARY
 # ============================================================
 
 def build_my_summary(
@@ -2020,7 +2033,7 @@ def build_my_summary(
     greeks
 ):
     """
-    신규 진입과 보유 판단을 독립적으로 실행한다.
+    신규 진입과 보유 판단을 완전히 독립적으로 실행한다.
     """
 
     new_entry = judge_new_entry(
@@ -2040,6 +2053,7 @@ def build_my_summary(
         "holding": holding
     }
 
+
 # ============================================================
 # REPORT
 # ============================================================
@@ -2055,6 +2069,10 @@ def build_report(
 ):
 
     lines = []
+
+    # ========================================================
+    # HEADER
+    # ========================================================
 
     lines.append(
         "━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -2095,9 +2113,9 @@ def build_report(
 
     lines.append("")
 
-    # --------------------------------------------------------
+    # ========================================================
     # FLOW
-    # --------------------------------------------------------
+    # ========================================================
 
     lines.append(
         "📊 <b>CALL / PUT 구조</b>"
@@ -2135,9 +2153,9 @@ def build_report(
 
     lines.append("")
 
-    # --------------------------------------------------------
+    # ========================================================
     # GREEKS
-    # --------------------------------------------------------
+    # ========================================================
 
     lines.append(
         "🧮 <b>AGGREGATE GREEKS</b>"
@@ -2180,9 +2198,9 @@ def build_report(
 
     lines.append("")
 
-    # --------------------------------------------------------
-    # WALL
-    # --------------------------------------------------------
+    # ========================================================
+    # OPTION WALL
+    # ========================================================
 
     lines.append(
         "🧱 <b>OPTION WALL</b>"
@@ -2236,9 +2254,225 @@ def build_report(
 
     lines.append("")
 
+    # ========================================================
+    # ⭐ FINAL OPTION STRUCTURE
+    # ========================================================
+
+    structure = build_structure_interpretation(
+        current_price,
+        walls,
+        greeks
+    )
+
+    my_summary = build_my_summary(
+        current_price,
+        walls,
+        greeks
+    )
+
+    # ========================================================
+    # OPTION STRUCTURE
+    # ========================================================
+
+    lines.append(
+        "📊 <b>OPTION STRUCTURE</b>"
+    )
+
+    lines.append("")
+
+    lines.append(
+        f"현재가: "
+        f"<b>${current_price:.2f}</b>"
+    )
+
     # --------------------------------------------------------
+    # 상방 핵심가격
+    # --------------------------------------------------------
+
+    if walls["call_wall"] is not None:
+
+        call_distance = (
+            (
+                walls["call_wall"]
+                - current_price
+            )
+            / current_price
+            * 100
+        )
+
+        lines.append(
+            f"상방 핵심가격: "
+            f"<b>${walls['call_wall']:g}</b> "
+            f"(현재가 대비 +{call_distance:.1f}%)"
+        )
+
+    else:
+
+        lines.append(
+            "상방 핵심가격: N/A"
+        )
+
+    # --------------------------------------------------------
+    # 하방 핵심가격
+    # --------------------------------------------------------
+
+    if walls["put_wall"] is not None:
+
+        put_distance = (
+            (
+                current_price
+                - walls["put_wall"]
+            )
+            / current_price
+            * 100
+        )
+
+        lines.append(
+            f"하방 핵심가격: "
+            f"<b>${walls['put_wall']:g}</b> "
+            f"(현재가 대비 -{put_distance:.1f}%)"
+        )
+
+    else:
+
+        lines.append(
+            "하방 핵심가격: N/A"
+        )
+
+    # --------------------------------------------------------
+    # GEX
+    # --------------------------------------------------------
+
+    gex_value = greeks.get(
+        "GEX",
+        0.0
+    )
+
+    if gex_value > 0:
+
+        gex_direction = "양(+)"
+
+    elif gex_value < 0:
+
+        gex_direction = "음(-)"
+
+    else:
+
+        gex_direction = "중립"
+
+    lines.append(
+        f"GEX: "
+        f"{format_money(gex_value)} "
+        f"({gex_direction})"
+    )
+
+    # --------------------------------------------------------
+    # DELTA
+    # --------------------------------------------------------
+
+    delta_value = greeks.get(
+        "Delta",
+        0.0
+    )
+
+    if delta_value > 0:
+
+        delta_direction = "양(+)"
+
+    elif delta_value < 0:
+
+        delta_direction = "음(-)"
+
+    else:
+
+        delta_direction = "중립"
+
+    lines.append(
+        f"Delta: "
+        f"{format_money(delta_value)} "
+        f"({delta_direction})"
+    )
+
+    # --------------------------------------------------------
+    # HIRO
+    # --------------------------------------------------------
+
+    hiro_value = greeks.get(
+        "HIRO",
+        0.0
+    )
+
+    if hiro_value > 0:
+
+        hiro_direction = "양(+)"
+
+    elif hiro_value < 0:
+
+        hiro_direction = "음(-)"
+
+    else:
+
+        hiro_direction = "중립"
+
+    lines.append(
+        f"HIRO: "
+        f"{format_money(hiro_value)} "
+        f"({hiro_direction})"
+    )
+
+    lines.append("")
+
+    # ========================================================
+    # STRUCTURE INTERPRETATION
+    # ========================================================
+
+    lines.append(
+        "📌 <b>구조 해석</b>"
+    )
+
+    lines.append("")
+
+    lines.append(
+        structure
+    )
+
+    lines.append("")
+
+    # ========================================================
+    # MY SUMMARY
+    # ========================================================
+
+    lines.append(
+        "📌 <b>나의 정리</b>"
+    )
+
+    lines.append("")
+
+    lines.append(
+        f"신규 진입: "
+        f"<b>{my_summary['new_entry']['label']}</b>"
+    )
+
+    lines.append(
+        f"• {my_summary['new_entry']['reason']}"
+    )
+
+    lines.append("")
+
+    lines.append(
+        f"보유 판단: "
+        f"<b>{my_summary['holding']['label']}</b>"
+    )
+
+    lines.append(
+        f"• {my_summary['holding']['reason']}"
+    )
+
+    lines.append("")
+
+    # ========================================================
     # TOP FLOW
-    # --------------------------------------------------------
+    # ========================================================
 
     top_calls, top_puts = find_top_flow(
         df,
@@ -2263,7 +2497,8 @@ def build_report(
                 f"• ${row['strike']:g} "
                 f"| DTE {int(row['DTE'])} "
                 f"| Vol {int(row['volume']):,} "
-                f"| {format_money(row['traded_premium_proxy'])}"
+                f"| "
+                f"{format_money(row['traded_premium_proxy'])}"
             )
 
     lines.append("")
@@ -2286,10 +2521,15 @@ def build_report(
                 f"• ${row['strike']:g} "
                 f"| DTE {int(row['DTE'])} "
                 f"| Vol {int(row['volume']):,} "
-                f"| {format_money(row['traded_premium_proxy'])}"
+                f"| "
+                f"{format_money(row['traded_premium_proxy'])}"
             )
 
     lines.append("")
+
+    # ========================================================
+    # DATA LIMITATIONS
+    # ========================================================
 
     lines.append(
         "⚠️ 거래대금 Proxy는 "
@@ -2301,7 +2541,8 @@ def build_report(
     )
 
     lines.append(
-        "⚠️ HIRO-like Flow는 실제 HIRO가 아닙니다."
+        "⚠️ HIRO는 실제 HIRO 데이터가 아닌 "
+        "HIRO-like Flow Proxy입니다."
     )
 
     lines.append(
@@ -2310,266 +2551,3 @@ def build_report(
     )
 
     return "\n".join(lines)
-
-
-# ============================================================
-# SAVE OPTION CSV
-# ============================================================
-
-def save_option_csv(
-    ticker,
-    df
-):
-
-    filename = os.path.join(
-        RESULT_DIR,
-        f"{ticker}_OPTION_SEARCH.csv"
-    )
-
-    df.to_csv(
-        filename,
-        index=False,
-        encoding="utf-8-sig"
-    )
-
-    print(
-        f"💾 CSV 저장: {filename}"
-    )
-
-    return filename
-
-
-# ============================================================
-# TELEGRAM
-# ============================================================
-
-def send_telegram(text):
-
-    if not BOT_TOKEN:
-
-        print(
-            "⚠️ TELEGRAM_BOT_TOKEN이 없습니다."
-        )
-
-        return False
-
-    if not CHAT_ID:
-
-        print(
-            "⚠️ TELEGRAM_CHAT_ID가 없습니다."
-        )
-
-        return False
-
-    url = (
-        "https://api.telegram.org/"
-        f"bot{BOT_TOKEN}/sendMessage"
-    )
-
-    data = {
-        "chat_id": CHAT_ID,
-        "text": text,
-        "parse_mode": "HTML"
-    }
-
-    try:
-
-        response = requests.post(
-            url,
-            data=data,
-            timeout=30
-        )
-
-        print(
-            f"📨 Telegram: "
-            f"{response.status_code}"
-        )
-
-        if not response.ok:
-
-            print(response.text)
-
-        return response.ok
-
-    except Exception as e:
-
-        print(
-            f"❌ Telegram 오류: {e}"
-        )
-
-        return False
-
-
-# ============================================================
-# ONE TICKER ANALYSIS
-# ============================================================
-
-def analyze_ticker(ticker):
-
-    ticker = (
-        ticker
-        .upper()
-        .strip()
-    )
-
-    print("")
-    print("=" * 70)
-
-    print(
-        f"🔥 OPTION SEARCH : {ticker}"
-    )
-
-    print("=" * 70)
-
-    current_price = get_current_price(
-        ticker
-    )
-
-    if current_price is None:
-
-        return None
-
-    print("")
-
-    df = get_option_data(
-        ticker
-    )
-
-    print("")
-
-    print(
-        f"📊 옵션 행수: {len(df):,}"
-    )
-
-    print(
-        f"📅 DTE: "
-        f"{df['DTE'].min()} ~ "
-        f"{df['DTE'].max()}"
-    )
-
-    print("")
-
-    print(
-        "📊 Greeks / GEX 계산..."
-    )
-
-    df = calculate_option_metrics(
-        df,
-        current_price
-    )
-
-    greeks = (
-        calculate_aggregate_greeks(
-            df
-        )
-    )
-
-    flow = (
-        calculate_flow_summary(
-            df,
-            current_price
-        )
-    )
-
-    walls = (
-        find_walls(
-            df,
-            current_price
-        )
-    )
-
-    quality = (
-        calculate_data_quality(
-            df
-        )
-    )
-
-    report = build_report(
-        ticker,
-        current_price,
-        df,
-        greeks,
-        flow,
-        walls,
-        quality
-    )
-
-    print("")
-    print(report)
-
-    csv_file = save_option_csv(
-        ticker,
-        df
-    )
-
-    # 개별 종목 Telegram
-    telegram_ok = send_telegram(
-        report
-    )
-
-    return {
-        "ticker": ticker,
-        "current_price": current_price,
-        "df": df,
-        "greeks": greeks,
-        "flow": flow,
-        "walls": walls,
-        "quality": quality,
-        "report": report,
-        "csv_file": csv_file,
-        "telegram_ok": telegram_ok
-    }
-
-
-# ============================================================
-# COMPATIBILITY
-# ============================================================
-
-def run(ticker):
-
-    result = analyze_ticker(
-        ticker
-    )
-
-    if result is None:
-
-        return False
-
-    return result["telegram_ok"]
-
-
-# ============================================================
-# STANDALONE
-# ============================================================
-
-def main():
-
-    if len(sys.argv) < 2:
-
-        print(
-            "사용법:"
-        )
-
-        print(
-            "python option_search.py TICKER"
-        )
-
-        sys.exit(1)
-
-    result = analyze_ticker(
-        sys.argv[1]
-    )
-
-    if result is None:
-
-        sys.exit(1)
-
-    print("")
-    print(
-        "🔥 OPTION SEARCH 완료"
-    )
-
-
-if __name__ == "__main__":
-
-    main()
