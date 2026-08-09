@@ -1438,6 +1438,607 @@ def calculate_data_quality(df):
         "label": label
     }
 
+# ============================================================
+# FINAL OPTION STRUCTURE
+# ============================================================
+
+ENTRY_RESISTANCE_PCT = 3.0
+HOLDING_SUPPORT_BUFFER_PCT = 2.0
+
+
+def get_structure_location(
+    current_price,
+    walls
+):
+    """
+    현재가가 Put Wall / Call Wall 중
+    어디에 위치하는지 판단한다.
+    """
+
+    put_wall = walls.get("put_wall")
+    call_wall = walls.get("call_wall")
+
+    if (
+        put_wall is not None
+        and call_wall is not None
+    ):
+
+        if current_price < put_wall:
+            return "BELOW_PUT_WALL"
+
+        if current_price > call_wall:
+            return "ABOVE_CALL_WALL"
+
+        return "BETWEEN_WALLS"
+
+    if put_wall is not None:
+
+        if current_price < put_wall:
+            return "BELOW_PUT_WALL"
+
+        return "ABOVE_PUT_WALL_ONLY"
+
+    if call_wall is not None:
+
+        if current_price > call_wall:
+            return "ABOVE_CALL_WALL"
+
+        return "BELOW_CALL_WALL_ONLY"
+
+    return "NO_WALL"
+
+
+# ============================================================
+# 구조 해석
+# ============================================================
+
+def build_structure_interpretation(
+    current_price,
+    walls,
+    greeks
+):
+
+    put_wall = walls.get("put_wall")
+    call_wall = walls.get("call_wall")
+
+    gex = float(
+        greeks.get("GEX", 0.0)
+    )
+
+    delta = float(
+        greeks.get("Delta", 0.0)
+    )
+
+    hiro = float(
+        greeks.get("HIRO", 0.0)
+    )
+
+    location = get_structure_location(
+        current_price,
+        walls
+    )
+
+    # --------------------------------------------------------
+    # 가격 위치
+    # --------------------------------------------------------
+
+    if location == "BELOW_PUT_WALL":
+
+        price_text = (
+            f"현재 가격은 Put Wall "
+            f"${put_wall:g} 아래에 있습니다."
+        )
+
+    elif location == "ABOVE_CALL_WALL":
+
+        price_text = (
+            f"현재 가격은 Call Wall "
+            f"${call_wall:g} 위에 있습니다."
+        )
+
+    elif location == "BETWEEN_WALLS":
+
+        price_text = (
+            f"현재 가격은 Put Wall "
+            f"${put_wall:g}과 Call Wall "
+            f"${call_wall:g} 사이에 있습니다."
+        )
+
+    elif location == "ABOVE_PUT_WALL_ONLY":
+
+        price_text = (
+            f"현재 가격은 Put Wall "
+            f"${put_wall:g} 위에 있습니다."
+        )
+
+    elif location == "BELOW_CALL_WALL_ONLY":
+
+        price_text = (
+            f"현재 가격은 Call Wall "
+            f"${call_wall:g} 아래에 있습니다."
+        )
+
+    else:
+
+        price_text = (
+            "현재 옵션 핵심 가격대가 "
+            "뚜렷하지 않습니다."
+        )
+
+    # --------------------------------------------------------
+    # GEX
+    # --------------------------------------------------------
+
+    if gex > 0:
+
+        gex_text = (
+            "GEX는 양(+)으로 가격 안정화 "
+            "성격이 강합니다."
+        )
+
+    elif gex < 0:
+
+        gex_text = (
+            "GEX는 음(-)으로 가격 변동성 "
+            "확대 가능성이 있습니다."
+        )
+
+    else:
+
+        gex_text = (
+            "GEX는 중립에 가깝습니다."
+        )
+
+    # --------------------------------------------------------
+    # Delta
+    # --------------------------------------------------------
+
+    if delta > 0:
+
+        delta_text = (
+            "Delta는 양(+)의 방향성을 보입니다."
+        )
+
+    elif delta < 0:
+
+        delta_text = (
+            "Delta는 음(-)의 방향성을 보입니다."
+        )
+
+    else:
+
+        delta_text = (
+            "Delta 방향성은 중립에 가깝습니다."
+        )
+
+    # --------------------------------------------------------
+    # HIRO
+    # --------------------------------------------------------
+
+    if hiro > 0:
+
+        hiro_text = (
+            "HIRO Proxy는 양(+)의 흐름을 보입니다."
+        )
+
+    elif hiro < 0:
+
+        hiro_text = (
+            "HIRO Proxy는 음(-)의 흐름을 보입니다."
+        )
+
+    else:
+
+        hiro_text = (
+            "HIRO Proxy 흐름은 중립에 가깝습니다."
+        )
+
+    return " ".join([
+        price_text,
+        gex_text,
+        delta_text,
+        hiro_text
+    ])
+
+
+# ============================================================
+# 신규 진입 판단
+# ============================================================
+
+def judge_new_entry(
+    current_price,
+    walls,
+    greeks
+):
+    """
+    신규 진입 전용 판단.
+
+    결과:
+        🟢 진입 가능
+        🟡 확인 후 진입
+        🔴 진입 금지
+
+    IMPORTANT:
+    보유 판단과 완전히 독립적으로 실행한다.
+    """
+
+    put_wall = walls.get("put_wall")
+    call_wall = walls.get("call_wall")
+
+    gex = float(
+        greeks.get("GEX", 0.0)
+    )
+
+    delta = float(
+        greeks.get("Delta", 0.0)
+    )
+
+    hiro = float(
+        greeks.get("HIRO", 0.0)
+    )
+
+    # --------------------------------------------------------
+    # 핵심 가격대 없음
+    # --------------------------------------------------------
+
+    if (
+        put_wall is None
+        and call_wall is None
+    ):
+
+        return {
+            "label": "🔴 진입 금지",
+            "reason": (
+                "핵심 옵션 가격대가 확인되지 않아 "
+                "신규 진입 우위가 부족합니다."
+            )
+        }
+
+    # --------------------------------------------------------
+    # Put Wall 하향 이탈
+    # --------------------------------------------------------
+
+    if (
+        put_wall is not None
+        and current_price < put_wall
+    ):
+
+        return {
+            "label": "🔴 진입 금지",
+            "reason": (
+                f"현재가가 Put Wall "
+                f"${put_wall:g} 아래에 있어 "
+                "하방 구조가 약합니다."
+            )
+        }
+
+    # --------------------------------------------------------
+    # Call Wall 돌파
+    # --------------------------------------------------------
+
+    if (
+        call_wall is not None
+        and current_price > call_wall
+    ):
+
+        if (
+            delta > 0
+            and hiro > 0
+            and gex >= 0
+        ):
+
+            return {
+                "label": "🟢 진입 가능",
+                "reason": (
+                    "Call Wall 상단에서 "
+                    "Delta와 HIRO가 긍정적이고 "
+                    "GEX도 안정적입니다."
+                )
+            }
+
+        return {
+            "label": "🟡 확인 후 진입",
+            "reason": (
+                "Call Wall 상단이지만 "
+                "Delta/HIRO/GEX가 모두 같은 방향으로 "
+                "확인되지 않았습니다."
+            )
+        }
+
+    # --------------------------------------------------------
+    # Call Wall 바로 아래
+    # --------------------------------------------------------
+
+    if call_wall is not None:
+
+        distance_to_call = (
+            (
+                call_wall
+                - current_price
+            )
+            / current_price
+            * 100
+        )
+
+        if (
+            0
+            <= distance_to_call
+            <= ENTRY_RESISTANCE_PCT
+        ):
+
+            return {
+                "label": "🟡 확인 후 진입",
+                "reason": (
+                    f"현재가는 Call Wall "
+                    f"${call_wall:g} 바로 아래에 있어 "
+                    "저항 돌파 확인이 필요합니다."
+                )
+            }
+
+    # --------------------------------------------------------
+    # Put Wall 위 + 긍정 흐름
+    # --------------------------------------------------------
+
+    if (
+        put_wall is not None
+        and current_price >= put_wall
+        and delta > 0
+        and hiro > 0
+    ):
+
+        return {
+            "label": "🟡 확인 후 진입",
+            "reason": (
+                "Put Wall 위에서 Delta와 HIRO가 "
+                "긍정적이지만 상방 핵심가격 확인이 "
+                "필요합니다."
+            )
+        }
+
+    # --------------------------------------------------------
+    # 기본
+    # --------------------------------------------------------
+
+    return {
+        "label": "🔴 진입 금지",
+        "reason": (
+            "현재 옵션 구조만으로는 "
+            "신규 진입 우위가 충분하지 않습니다."
+        )
+    }
+
+
+# ============================================================
+# 보유 판단
+# ============================================================
+
+def judge_holding(
+    current_price,
+    walls,
+    greeks
+):
+    """
+    기존 보유자 전용 판단.
+
+    결과:
+        🟢 유지
+        🟡 주의
+        🟠 축소검토
+        🔴 이탈검토
+
+    IMPORTANT:
+    신규 진입 판단과 완전히 독립적으로 실행한다.
+    """
+
+    put_wall = walls.get("put_wall")
+    call_wall = walls.get("call_wall")
+
+    gex = float(
+        greeks.get("GEX", 0.0)
+    )
+
+    delta = float(
+        greeks.get("Delta", 0.0)
+    )
+
+    hiro = float(
+        greeks.get("HIRO", 0.0)
+    )
+
+    # --------------------------------------------------------
+    # Put Wall 하향 이탈
+    # --------------------------------------------------------
+
+    if (
+        put_wall is not None
+        and current_price < put_wall
+    ):
+
+        return {
+            "label": "🔴 이탈검토",
+            "reason": (
+                f"현재가가 Put Wall "
+                f"${put_wall:g} 아래로 내려가 "
+                "핵심 하방 지지 구조가 약해졌습니다."
+            )
+        }
+
+    # --------------------------------------------------------
+    # Put Wall 근처
+    # --------------------------------------------------------
+
+    if put_wall is not None:
+
+        support_distance = (
+            (
+                current_price
+                - put_wall
+            )
+            / current_price
+            * 100
+        )
+
+        if (
+            0
+            <= support_distance
+            <= HOLDING_SUPPORT_BUFFER_PCT
+        ):
+
+            return {
+                "label": "🟡 주의",
+                "reason": (
+                    f"현재가가 Put Wall "
+                    f"${put_wall:g} 부근에 있어 "
+                    "지지 유지 여부 확인이 필요합니다."
+                )
+            }
+
+    # --------------------------------------------------------
+    # Call Wall 근처
+    # --------------------------------------------------------
+
+    if call_wall is not None:
+
+        resistance_distance = (
+            (
+                call_wall
+                - current_price
+            )
+            / current_price
+            * 100
+        )
+
+        if (
+            0
+            <= resistance_distance
+            <= ENTRY_RESISTANCE_PCT
+        ):
+
+            return {
+                "label": "🟡 주의",
+                "reason": (
+                    f"현재가가 Call Wall "
+                    f"${call_wall:g} 부근에 있어 "
+                    "상방 저항 확인이 필요합니다."
+                )
+            }
+
+    # --------------------------------------------------------
+    # Delta + HIRO 동시 악화
+    # --------------------------------------------------------
+
+    if (
+        delta < 0
+        and hiro < 0
+    ):
+
+        return {
+            "label": "🟠 축소검토",
+            "reason": (
+                "Delta와 HIRO 흐름이 모두 약해져 "
+                "보유 비중 축소를 검토할 구간입니다."
+            )
+        }
+
+    # --------------------------------------------------------
+    # 음의 GEX + 약한 방향성
+    # --------------------------------------------------------
+
+    if (
+        gex < 0
+        and (
+            delta < 0
+            or hiro < 0
+        )
+    ):
+
+        return {
+            "label": "🟠 축소검토",
+            "reason": (
+                "음(-)의 GEX와 약한 방향성 흐름이 "
+                "동시에 나타나 위험 관리가 필요합니다."
+            )
+        }
+
+    # --------------------------------------------------------
+    # 지지 위 + 긍정 흐름
+    # --------------------------------------------------------
+
+    if (
+        put_wall is not None
+        and current_price > put_wall
+        and delta > 0
+        and hiro > 0
+    ):
+
+        return {
+            "label": "🟢 유지",
+            "reason": (
+                "현재가가 Put Wall 위에 있고 "
+                "Delta와 HIRO 흐름도 긍정적입니다."
+            )
+        }
+
+    # --------------------------------------------------------
+    # GEX 양수 + 지지 위
+    # --------------------------------------------------------
+
+    if (
+        put_wall is not None
+        and current_price >= put_wall
+        and gex > 0
+    ):
+
+        return {
+            "label": "🟢 유지",
+            "reason": (
+                "현재가가 Put Wall 위에 있고 "
+                "GEX 구조가 안정적입니다."
+            )
+        }
+
+    # --------------------------------------------------------
+    # 기본
+    # --------------------------------------------------------
+
+    return {
+        "label": "🟡 주의",
+        "reason": (
+            "핵심 지지 구조는 유지되지만 "
+            "추가적인 방향성 확인이 필요합니다."
+        )
+    }
+
+
+# ============================================================
+# 나의 정리
+# ============================================================
+
+def build_my_summary(
+    current_price,
+    walls,
+    greeks
+):
+    """
+    신규 진입과 보유 판단을 독립적으로 실행한다.
+    """
+
+    new_entry = judge_new_entry(
+        current_price,
+        walls,
+        greeks
+    )
+
+    holding = judge_holding(
+        current_price,
+        walls,
+        greeks
+    )
+
+    return {
+        "new_entry": new_entry,
+        "holding": holding
+    }
 
 # ============================================================
 # REPORT
