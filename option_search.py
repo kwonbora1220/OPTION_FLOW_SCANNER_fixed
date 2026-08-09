@@ -24,8 +24,16 @@ CHAT_ID = os.environ.get(
 )
 
 MAX_DTE = 180
+
 RISK_FREE_RATE = 0.04
+
 CONTRACT_MULTIPLIER = 100
+
+# Wall 계산 범위
+WALL_RANGE_PCT = 30
+
+# ATM IV 범위
+ATM_RANGE_PCT = 5
 
 
 # ============================================================
@@ -42,8 +50,6 @@ RESULT_DIR = os.path.join(
     "daily"
 )
 
-# 만약 option_search.py가 02_PROGRAM 안에 있다면
-# 아래 경로로 자동 변경
 if os.path.basename(BASE_DIR).upper() == "02_PROGRAM":
 
     RESULT_DIR = os.path.abspath(
@@ -85,7 +91,10 @@ def get_current_price(ticker):
 
             if not hist.empty:
 
-                close = hist["Close"].dropna()
+                close = (
+                    hist["Close"]
+                    .dropna()
+                )
 
                 if not close.empty:
 
@@ -94,7 +103,8 @@ def get_current_price(ticker):
                     )
 
                     print(
-                        f"💰 {ticker} 현재가: ${price:.2f}"
+                        f"💰 {ticker} 현재가: "
+                        f"${price:.2f}"
                     )
 
                     return price
@@ -159,7 +169,8 @@ def get_option_data(ticker):
             continue
 
     print(
-        f"📅 전체 만기: {len(expirations)}개"
+        f"📅 전체 만기: "
+        f"{len(expirations)}개"
     )
 
     print(
@@ -246,11 +257,21 @@ def normalize_option_data(df):
                 errors="coerce"
             ).fillna(0)
 
+    df["volume"] = (
+        df["volume"]
+        .clip(lower=0)
+    )
+
+    df["openInterest"] = (
+        df["openInterest"]
+        .clip(lower=0)
+    )
+
     return df
 
 
 # ============================================================
-# BLACK-SCHOLES
+# BLACK-SCHOLES HELPERS
 # ============================================================
 
 def norm_pdf(x):
@@ -297,7 +318,7 @@ def safe_iv(iv):
 
 
 # ============================================================
-# GREEKS
+# BLACK-SCHOLES GREEKS
 # ============================================================
 
 def calculate_greeks(
@@ -315,16 +336,15 @@ def calculate_greeks(
         iv = safe_iv(iv)
         dte = float(dte)
 
-        if spot <= 0 or strike <= 0:
+        if spot <= 0:
+            raise ValueError("invalid spot")
 
-            return (
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                iv
-            )
+        if strike <= 0:
+            raise ValueError("invalid strike")
 
+        # 만기 당일은 1일 근사.
+        # 무료 데이터의 특성상 장중 정확한 초단기 T를
+        # 알 수 없기 때문에 안정성을 우선한다.
         T = max(
             dte / 365.0,
             1 / 365.0
@@ -353,13 +373,24 @@ def calculate_greeks(
 
         pdf = norm_pdf(d1)
 
+        # ----------------------------------------------------
+        # DELTA
+        # ----------------------------------------------------
+
         if option_type == "CALL":
 
             delta = norm_cdf(d1)
 
         else:
 
-            delta = norm_cdf(d1) - 1
+            delta = (
+                norm_cdf(d1) - 1
+            )
+
+        # ----------------------------------------------------
+        # GAMMA
+        # 동일한 공식
+        # ----------------------------------------------------
 
         gamma = (
             pdf
@@ -370,11 +401,32 @@ def calculate_greeks(
             )
         )
 
+        # ----------------------------------------------------
+        # VEGA
+        # 1.00 = volatility 100% 변화 기준
+        # ----------------------------------------------------
+
+        vega = (
+            spot
+            * pdf
+            * sqrt_T
+        )
+
+        # ----------------------------------------------------
+        # VANNA
+        # dDelta / dVol
+        # ----------------------------------------------------
+
         vanna = (
             -pdf
             * d2
             / iv
         )
+
+        # ----------------------------------------------------
+        # CHARM
+        # Delta decay proxy
+        # ----------------------------------------------------
 
         charm_common = (
             pdf
@@ -387,45 +439,82 @@ def calculate_greeks(
             )
         )
 
+        charm = (
+            -charm_common
+            / (
+                spot
+                * iv
+                * sqrt_T
+            )
+        )
+
+        # ----------------------------------------------------
+        # THETA
+        # ----------------------------------------------------
+
         if option_type == "CALL":
 
-            charm = (
-                -charm_common
-                / (
+            theta = (
+                -(
                     spot
+                    * pdf
                     * iv
-                    * sqrt_T
+                    / (
+                        2 * sqrt_T
+                    )
+                )
+                - (
+                    r
+                    * strike
+                    * math.exp(
+                        -r * T
+                    )
+                    * norm_cdf(d2)
                 )
             )
 
         else:
 
-            charm = (
-                charm_common
-                / (
+            theta = (
+                -(
                     spot
+                    * pdf
                     * iv
-                    * sqrt_T
+                    / (
+                        2 * sqrt_T
+                    )
+                )
+                + (
+                    r
+                    * strike
+                    * math.exp(
+                        -r * T
+                    )
+                    * norm_cdf(-d2)
                 )
             )
 
-        return (
-            delta,
-            gamma,
-            vanna,
-            charm,
-            iv
-        )
+        return {
+            "delta": delta,
+            "gamma": gamma,
+            "vega": vega,
+            "vanna": vanna,
+            "charm": charm,
+            "theta": theta,
+            "iv": iv
+        }
 
     except Exception:
 
-        return (
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            safe_iv(iv)
-        )
+        return {
+            "delta": 0.0,
+            "gamma": 0.0,
+            "vega": 0.0,
+            "vanna": 0.0,
+            "charm": 0.0,
+            "theta": 0.0,
+            "iv": safe_iv(iv)
+        }
 
 
 # ============================================================
@@ -441,19 +530,15 @@ def calculate_option_metrics(
 
     delta_list = []
     gamma_list = []
+    vega_list = []
     vanna_list = []
     charm_list = []
+    theta_list = []
     iv_list = []
 
     for _, row in df.iterrows():
 
-        (
-            delta,
-            gamma,
-            vanna,
-            charm,
-            iv
-        ) = calculate_greeks(
+        greeks = calculate_greeks(
             current_price,
             row["strike"],
             row["impliedVolatility"],
@@ -461,31 +546,115 @@ def calculate_option_metrics(
             row["option_type"]
         )
 
-        delta_list.append(delta)
-        gamma_list.append(gamma)
-        vanna_list.append(vanna)
-        charm_list.append(charm)
-        iv_list.append(iv)
+        delta_list.append(
+            greeks["delta"]
+        )
+
+        gamma_list.append(
+            greeks["gamma"]
+        )
+
+        vega_list.append(
+            greeks["vega"]
+        )
+
+        vanna_list.append(
+            greeks["vanna"]
+        )
+
+        charm_list.append(
+            greeks["charm"]
+        )
+
+        theta_list.append(
+            greeks["theta"]
+        )
+
+        iv_list.append(
+            greeks["iv"]
+        )
 
     df["delta"] = delta_list
     df["gamma"] = gamma_list
+    df["vega"] = vega_list
     df["vanna"] = vanna_list
     df["charm"] = charm_list
+    df["theta"] = theta_list
     df["IV"] = iv_list
 
-    # --------------------------------------------------------
-    # Premium
-    # --------------------------------------------------------
+    # ========================================================
+    # TRADED PREMIUM PROXY
+    # ========================================================
+    #
+    # 중요:
+    # 실제 BUY/SELL Premium Flow가 아니다.
+    # 거래량 × 마지막 가격으로 계산한 거래대금 Proxy.
+    #
 
-    df["premium_flow"] = (
+    df["traded_premium_proxy"] = (
         df["lastPrice"]
         * df["volume"]
         * CONTRACT_MULTIPLIER
     )
 
-    # --------------------------------------------------------
-    # GEX
-    # --------------------------------------------------------
+    # 기존 컬럼 호환
+    df["premium_flow"] = (
+        df["traded_premium_proxy"]
+    )
+
+    # ========================================================
+    # BID / ASK SPREAD
+    # ========================================================
+
+    df["mid_price"] = (
+        (
+            df["bid"]
+            + df["ask"]
+        )
+        / 2
+    )
+
+    df["spread_pct"] = 0.0
+
+    valid_mid = (
+        df["mid_price"] > 0
+    )
+
+    df.loc[
+        valid_mid,
+        "spread_pct"
+    ] = (
+        (
+            df.loc[
+                valid_mid,
+                "ask"
+            ]
+            -
+            df.loc[
+                valid_mid,
+                "bid"
+            ]
+        )
+        /
+        df.loc[
+            valid_mid,
+            "mid_price"
+        ]
+        * 100
+    )
+
+    # ========================================================
+    # DEALER GEX PROXY
+    # ========================================================
+    #
+    # 1% underlying move 기준.
+    #
+    # Call = +
+    # Put  = -
+    #
+    # 이것은 실제 dealer positioning이 아니라
+    # OI 기반 positioning 가정이다.
+    #
 
     df["GEX"] = (
         df["gamma"]
@@ -493,6 +662,7 @@ def calculate_option_metrics(
         * CONTRACT_MULTIPLIER
         * current_price
         * current_price
+        * 0.01
     )
 
     df.loc[
@@ -500,9 +670,13 @@ def calculate_option_metrics(
         "GEX"
     ] *= -1
 
-    # --------------------------------------------------------
-    # Delta Exposure
-    # --------------------------------------------------------
+    # ========================================================
+    # NET OI DELTA EXPOSURE PROXY
+    # ========================================================
+    #
+    # OI가 실제 long/short 방향을 알려주지는 않는다.
+    # 따라서 "OI Delta Exposure Proxy"로 사용한다.
+    #
 
     df["delta_exposure"] = (
         df["delta"]
@@ -511,9 +685,9 @@ def calculate_option_metrics(
         * current_price
     )
 
-    # --------------------------------------------------------
-    # Vanna
-    # --------------------------------------------------------
+    # ========================================================
+    # VANNA EXPOSURE
+    # ========================================================
 
     df["vanna_exposure"] = (
         df["vanna"]
@@ -522,9 +696,9 @@ def calculate_option_metrics(
         * current_price
     )
 
-    # --------------------------------------------------------
-    # Charm
-    # --------------------------------------------------------
+    # ========================================================
+    # CHARM EXPOSURE
+    # ========================================================
 
     df["charm_exposure"] = (
         df["charm"]
@@ -533,23 +707,62 @@ def calculate_option_metrics(
         * current_price
     )
 
-    # --------------------------------------------------------
-    # HIRO PROXY
-    # --------------------------------------------------------
+    # ========================================================
+    # VEGA EXPOSURE
+    # ========================================================
+
+    df["vega_exposure"] = (
+        df["vega"]
+        * df["openInterest"]
+        * CONTRACT_MULTIPLIER
+    )
+
+    # ========================================================
+    # TRADE SIDE PROXY
+    # ========================================================
+    #
+    # 실제 체결 방향 데이터가 없기 때문에 Proxy.
+    #
 
     def estimate_trade_side(row):
 
         try:
 
-            last = float(row["lastPrice"])
-            bid = float(row["bid"])
-            ask = float(row["ask"])
+            last = float(
+                row["lastPrice"]
+            )
 
-            if ask > 0 and last >= ask * 0.98:
-                return 1
+            bid = float(
+                row["bid"]
+            )
 
-            if bid > 0 and last <= bid * 1.02:
-                return -1
+            ask = float(
+                row["ask"]
+            )
+
+            if (
+                ask > 0
+                and bid > 0
+                and ask >= bid
+            ):
+
+                if (
+                    last
+                    >= ask - (
+                        ask - bid
+                    ) * 0.20
+                ):
+
+                    return 1
+
+                if (
+                    last
+                    <= bid + (
+                        ask - bid
+                    ) * 0.20
+                ):
+
+                    return -1
 
             return 0
 
@@ -557,17 +770,30 @@ def calculate_option_metrics(
 
             return 0
 
-    df["trade_side"] = df.apply(
+    df["trade_side_proxy"] = df.apply(
         estimate_trade_side,
         axis=1
     )
+
+    # 기존 호환
+    df["trade_side"] = (
+        df["trade_side_proxy"]
+    )
+
+    # ========================================================
+    # HIRO-LIKE FLOW PROXY
+    # ========================================================
+    #
+    # 실제 HIRO가 아니다.
+    # delta × volume × spot × estimated trade side
+    #
 
     df["HIRO_proxy"] = (
         df["delta"]
         * df["volume"]
         * CONTRACT_MULTIPLIER
         * current_price
-        * df["trade_side"]
+        * df["trade_side_proxy"]
     )
 
     return df
@@ -581,44 +807,298 @@ def calculate_aggregate_greeks(df):
 
     result = {}
 
-    result["IV"] = (
-        df["IV"]
-        .replace(
-            [float("inf"), -float("inf")],
-            0
+    # --------------------------------------------------------
+    # IV
+    # --------------------------------------------------------
+
+    valid_iv = df[
+        (df["IV"] > 0)
+        & (df["IV"] < 5)
+        & (df["volume"] > 0)
+    ].copy()
+
+    if not valid_iv.empty:
+
+        volume_sum = (
+            valid_iv["volume"]
+            .sum()
         )
-        .mean()
-    )
+
+        if volume_sum > 0:
+
+            result["IV"] = (
+                (
+                    valid_iv["IV"]
+                    * valid_iv["volume"]
+                ).sum()
+                / volume_sum
+            )
+
+        else:
+
+            result["IV"] = (
+                valid_iv["IV"].mean()
+            )
+
+    else:
+
+        result["IV"] = 0.0
+
+    # --------------------------------------------------------
+    # Delta
+    # --------------------------------------------------------
 
     result["Delta"] = (
-        df["delta_exposure"].sum()
+        df["delta_exposure"]
+        .sum()
     )
+
+    # --------------------------------------------------------
+    # Gamma / GEX
+    # --------------------------------------------------------
 
     result["Gamma"] = (
-        df["GEX"].sum()
-    )
-
-    result["Vanna"] = (
-        df["vanna_exposure"].sum()
-    )
-
-    result["Charm"] = (
-        df["charm_exposure"].sum()
+        df["GEX"]
+        .sum()
     )
 
     result["GEX"] = (
-        df["GEX"].sum()
+        df["GEX"]
+        .sum()
     )
 
+    # --------------------------------------------------------
+    # Vanna
+    # --------------------------------------------------------
+
+    result["Vanna"] = (
+        df["vanna_exposure"]
+        .sum()
+    )
+
+    # --------------------------------------------------------
+    # Charm
+    # --------------------------------------------------------
+
+    result["Charm"] = (
+        df["charm_exposure"]
+        .sum()
+    )
+
+    # --------------------------------------------------------
+    # Vega
+    # --------------------------------------------------------
+
+    result["Vega"] = (
+        df["vega_exposure"]
+        .sum()
+    )
+
+    # --------------------------------------------------------
+    # HIRO Proxy
+    # --------------------------------------------------------
+
     result["HIRO"] = (
-        df["HIRO_proxy"].sum()
+        df["HIRO_proxy"]
+        .sum()
     )
 
     return result
 
 
 # ============================================================
-# WALL
+# MARKET / FLOW SUMMARY
+# ============================================================
+
+def calculate_flow_summary(
+    df,
+    current_price
+):
+
+    calls = df[
+        df["option_type"] == "CALL"
+    ]
+
+    puts = df[
+        df["option_type"] == "PUT"
+    ]
+
+    call_volume = float(
+        calls["volume"].sum()
+    )
+
+    put_volume = float(
+        puts["volume"].sum()
+    )
+
+    call_oi = float(
+        calls["openInterest"].sum()
+    )
+
+    put_oi = float(
+        puts["openInterest"].sum()
+    )
+
+    call_premium = float(
+        calls[
+            "traded_premium_proxy"
+        ].sum()
+    )
+
+    put_premium = float(
+        puts[
+            "traded_premium_proxy"
+        ].sum()
+    )
+
+    total_volume = (
+        call_volume
+        + put_volume
+    )
+
+    total_oi = (
+        call_oi
+        + put_oi
+    )
+
+    total_premium = (
+        call_premium
+        + put_premium
+    )
+
+    if total_volume > 0:
+
+        call_volume_ratio = (
+            call_volume
+            / total_volume
+        )
+
+    else:
+
+        call_volume_ratio = 0.5
+
+    if total_oi > 0:
+
+        call_oi_ratio = (
+            call_oi
+            / total_oi
+        )
+
+    else:
+
+        call_oi_ratio = 0.5
+
+    if total_premium > 0:
+
+        call_premium_ratio = (
+            call_premium
+            / total_premium
+        )
+
+    else:
+
+        call_premium_ratio = 0.5
+
+    # --------------------------------------------------------
+    # ATM IV
+    # --------------------------------------------------------
+
+    atm = df[
+        (
+            abs(
+                df["strike"]
+                - current_price
+            )
+            / current_price
+            * 100
+        )
+        <= ATM_RANGE_PCT
+    ].copy()
+
+    atm = atm[
+        (atm["IV"] > 0)
+        & (atm["volume"] > 0)
+    ]
+
+    if not atm.empty:
+
+        volume_sum = (
+            atm["volume"].sum()
+        )
+
+        if volume_sum > 0:
+
+            atm_iv = (
+                (
+                    atm["IV"]
+                    * atm["volume"]
+                ).sum()
+                / volume_sum
+            )
+
+        else:
+
+            atm_iv = atm["IV"].mean()
+
+    else:
+
+        atm_iv = 0.0
+
+    # --------------------------------------------------------
+    # DTE distribution
+    # --------------------------------------------------------
+
+    dte_buckets = {
+        "0_7": int(
+            (
+                (df["DTE"] >= 0)
+                &
+                (df["DTE"] <= 7)
+            ).sum()
+        ),
+
+        "8_30": int(
+            (
+                (df["DTE"] >= 8)
+                &
+                (df["DTE"] <= 30)
+            ).sum()
+        ),
+
+        "31_60": int(
+            (
+                (df["DTE"] >= 31)
+                &
+                (df["DTE"] <= 60)
+            ).sum()
+        ),
+
+        "61_180": int(
+            (
+                (df["DTE"] >= 61)
+                &
+                (df["DTE"] <= 180)
+            ).sum()
+        )
+    }
+
+    return {
+        "call_volume": call_volume,
+        "put_volume": put_volume,
+        "call_oi": call_oi,
+        "put_oi": put_oi,
+        "call_premium": call_premium,
+        "put_premium": put_premium,
+        "call_volume_ratio": call_volume_ratio,
+        "call_oi_ratio": call_oi_ratio,
+        "call_premium_ratio": call_premium_ratio,
+        "atm_iv": atm_iv,
+        "dte_buckets": dte_buckets
+    }
+
+
+# ============================================================
+# WALLS
 # ============================================================
 
 def find_walls(
@@ -627,11 +1107,19 @@ def find_walls(
 ):
 
     active = df[
-        df["volume"] > 0
+        df["openInterest"] > 0
     ].copy()
 
     if active.empty:
-        return None, None
+
+        return {
+            "call_wall": None,
+            "put_wall": None,
+            "call_wall_gex": 0.0,
+            "put_wall_gex": 0.0,
+            "call_wall_oi": 0.0,
+            "put_wall_oi": 0.0
+        }
 
     active["distance_pct"] = (
         abs(
@@ -643,11 +1131,24 @@ def find_walls(
     )
 
     active = active[
-        active["distance_pct"] <= 30
+        active["distance_pct"]
+        <= WALL_RANGE_PCT
     ].copy()
 
     if active.empty:
-        return None, None
+
+        return {
+            "call_wall": None,
+            "put_wall": None,
+            "call_wall_gex": 0.0,
+            "put_wall_gex": 0.0,
+            "call_wall_oi": 0.0,
+            "put_wall_oi": 0.0
+        }
+
+    # --------------------------------------------------------
+    # CALL WALL
+    # --------------------------------------------------------
 
     calls = active[
         (
@@ -662,20 +1163,47 @@ def find_walls(
     ]
 
     call_wall = None
+    call_wall_gex = 0.0
+    call_wall_oi = 0.0
 
     if not calls.empty:
 
-        group = (
+        grouped = (
             calls
-            .groupby("strike")["GEX"]
-            .sum()
+            .groupby("strike")
+            .agg(
+                gex=("GEX", "sum"),
+                oi=("openInterest", "sum"),
+                volume=("volume", "sum")
+            )
         )
 
-        if not group.empty:
+        if not grouped.empty:
 
-            call_wall = float(
-                group.idxmax()
+            # GEX가 가장 큰 Strike
+            idx = grouped[
+                "gex"
+            ].idxmax()
+
+            call_wall = float(idx)
+
+            call_wall_gex = float(
+                grouped.loc[
+                    idx,
+                    "gex"
+                ]
             )
+
+            call_wall_oi = float(
+                grouped.loc[
+                    idx,
+                    "oi"
+                ]
+            )
+
+    # --------------------------------------------------------
+    # PUT WALL
+    # --------------------------------------------------------
 
     puts = active[
         (
@@ -690,22 +1218,51 @@ def find_walls(
     ]
 
     put_wall = None
+    put_wall_gex = 0.0
+    put_wall_oi = 0.0
 
     if not puts.empty:
 
-        group = (
+        grouped = (
             puts
-            .groupby("strike")["GEX"]
-            .sum()
+            .groupby("strike")
+            .agg(
+                gex=("GEX", "sum"),
+                oi=("openInterest", "sum"),
+                volume=("volume", "sum")
+            )
         )
 
-        if not group.empty:
+        if not grouped.empty:
 
-            put_wall = float(
-                group.idxmin()
+            idx = grouped[
+                "gex"
+            ].idxmin()
+
+            put_wall = float(idx)
+
+            put_wall_gex = float(
+                grouped.loc[
+                    idx,
+                    "gex"
+                ]
             )
 
-    return call_wall, put_wall
+            put_wall_oi = float(
+                grouped.loc[
+                    idx,
+                    "oi"
+                ]
+            )
+
+    return {
+        "call_wall": call_wall,
+        "put_wall": put_wall,
+        "call_wall_gex": call_wall_gex,
+        "put_wall_gex": put_wall_gex,
+        "call_wall_oi": call_wall_oi,
+        "put_wall_oi": put_wall_oi
+    }
 
 
 # ============================================================
@@ -738,15 +1295,27 @@ def find_top_flow(
     )
 
     active = active[
-        active["distance_pct"] <= 30
+        active["distance_pct"]
+        <= WALL_RANGE_PCT
     ].copy()
+
+    if active.empty:
+
+        return (
+            pd.DataFrame(),
+            pd.DataFrame()
+        )
 
     calls = (
         active[
-            active["option_type"] == "CALL"
+            active["option_type"]
+            == "CALL"
         ]
         .sort_values(
-            "volume",
+            [
+                "traded_premium_proxy",
+                "volume"
+            ],
             ascending=False
         )
         .head(5)
@@ -754,10 +1323,14 @@ def find_top_flow(
 
     puts = (
         active[
-            active["option_type"] == "PUT"
+            active["option_type"]
+            == "PUT"
         ]
         .sort_values(
-            "volume",
+            [
+                "traded_premium_proxy",
+                "volume"
+            ],
             ascending=False
         )
         .head(5)
@@ -767,120 +1340,58 @@ def find_top_flow(
 
 
 # ============================================================
-# FORMAT
+# DATA QUALITY
 # ============================================================
 
-def format_money(x):
+def calculate_data_quality(df):
 
-    try:
-        x = float(x)
-    except Exception:
-        return "$0"
+    total = len(df)
 
-    sign = ""
+    if total == 0:
 
-    if x < 0:
+        return {
+            "score": 0,
+            "label": "LOW"
+        }
 
-        sign = "-"
-        x = abs(x)
-
-    if x >= 1_000_000:
-
-        return (
-            f"{sign}${x / 1_000_000:.2f}M"
+    valid_bidask = (
+        (
+            df["bid"] > 0
         )
-
-    if x >= 1_000:
-
-        return (
-            f"{sign}${x / 1_000:.1f}K"
+        &
+        (
+            df["ask"] > 0
         )
+        &
+        (
+            df["ask"] >= df["bid"]
+        )
+    ).mean()
 
-    return (
-        f"{sign}${x:.0f}"
+    active_volume = (
+        df["volume"] > 0
+    ).mean()
+
+    score = (
+        valid_bidask * 60
+        + active_volume * 40
     )
 
+    if score >= 75:
 
-def format_greek(x):
+        label = "HIGH"
 
-    try:
-        return f"{float(x):+.3f}"
-    except Exception:
-        return "0.000"
+    elif score >= 45:
 
+        label = "MEDIUM"
 
-def format_iv(x):
-
-    try:
-        return (
-            f"{float(x) * 100:.1f}%"
-        )
-    except Exception:
-        return "0.0%"
-
-
-# ============================================================
-# STRUCTURE
-# ============================================================
-
-def build_structure_judgement(
-    greeks
-):
-
-    delta = greeks["Delta"]
-    gex = greeks["GEX"]
-    hiro = greeks["HIRO"]
-
-    if delta > 0:
-        delta_label = "🟢 BULLISH"
-    elif delta < 0:
-        delta_label = "🔴 BEARISH"
     else:
-        delta_label = "🟡 NEUTRAL"
 
-    if gex > 0:
-        gex_label = "🟢 POSITIVE"
-    elif gex < 0:
-        gex_label = "🔴 NEGATIVE"
-    else:
-        gex_label = "🟡 NEUTRAL"
-
-    if hiro > 0:
-        hiro_label = "🟢 POSITIVE"
-    elif hiro < 0:
-        hiro_label = "🔴 NEGATIVE"
-    else:
-        hiro_label = "🟡 NEUTRAL"
-
-    score = 0
-
-    if delta > 0:
-        score += 1
-    elif delta < 0:
-        score -= 1
-
-    if hiro > 0:
-        score += 1
-    elif hiro < 0:
-        score -= 1
-
-    if gex > 0:
-        score += 1
-    elif gex < 0:
-        score -= 1
-
-    if score >= 2:
-        overall = "🟢 BULLISH"
-    elif score <= -2:
-        overall = "🔴 BEARISH"
-    else:
-        overall = "🟡 NEUTRAL"
+        label = "LOW"
 
     return {
-        "delta_label": delta_label,
-        "gex_label": gex_label,
-        "hiro_label": hiro_label,
-        "overall": overall
+        "score": score,
+        "label": label
     }
 
 
@@ -891,398 +1402,273 @@ def build_structure_judgement(
 def build_report(
     ticker,
     current_price,
-    df
+    df,
+    greeks,
+    flow,
+    walls,
+    quality
 ):
-
-    greeks = calculate_aggregate_greeks(df)
-
-    call_wall, put_wall = find_walls(
-        df,
-        current_price
-    )
-
-    calls, puts = find_top_flow(
-        df,
-        current_price
-    )
-
-    judgement = build_structure_judgement(
-        greeks
-    )
-
-    today_str = datetime.now().strftime(
-        "%Y-%m-%d"
-    )
 
     lines = []
 
     lines.append(
-        f"📅 <b>{today_str}</b>"
+        "━━━━━━━━━━━━━━━━━━━━━━━━"
+    )
+
+    lines.append(
+        f"🔥 <b>{ticker} OPTION SEARCH</b>"
+    )
+
+    lines.append(
+        "━━━━━━━━━━━━━━━━━━━━━━━━"
     )
 
     lines.append("")
 
     lines.append(
-        "🔥 <b>OPTION SEARCH</b>"
+        f"💰 현재가: "
+        f"<b>${current_price:.2f}</b>"
+    )
+
+    lines.append(
+        f"📊 옵션 행수: "
+        f"{len(df):,}"
+    )
+
+    lines.append(
+        f"📅 DTE: "
+        f"{int(df['DTE'].min())}"
+        f" ~ "
+        f"{int(df['DTE'].max())}"
+    )
+
+    lines.append(
+        f"🧪 데이터 품질: "
+        f"{quality['label']} "
+        f"({quality['score']:.0f}/100)"
     )
 
     lines.append("")
 
+    # --------------------------------------------------------
+    # FLOW
+    # --------------------------------------------------------
+
     lines.append(
-        f"<b>{ticker}</b>"
+        "📊 <b>CALL / PUT 구조</b>"
     )
 
     lines.append(
-        f"현재가: ${current_price:.2f}"
+        f"CALL Volume: "
+        f"{flow['call_volume']:,.0f}"
+    )
+
+    lines.append(
+        f"PUT Volume: "
+        f"{flow['put_volume']:,.0f}"
+    )
+
+    lines.append(
+        f"CALL OI: "
+        f"{flow['call_oi']:,.0f}"
+    )
+
+    lines.append(
+        f"PUT OI: "
+        f"{flow['put_oi']:,.0f}"
+    )
+
+    lines.append(
+        f"CALL 거래대금 Proxy: "
+        f"{format_money(flow['call_premium'])}"
+    )
+
+    lines.append(
+        f"PUT 거래대금 Proxy: "
+        f"{format_money(flow['put_premium'])}"
     )
 
     lines.append("")
 
+    # --------------------------------------------------------
+    # GREEKS
+    # --------------------------------------------------------
+
     lines.append(
-        "📅 DTE 0~180 전체 만기 분석"
+        "🧮 <b>AGGREGATE GREEKS</b>"
+    )
+
+    lines.append(
+        f"Delta Exposure Proxy: "
+        f"{format_money(greeks['Delta'])}"
+    )
+
+    lines.append(
+        f"GEX Proxy / 1%: "
+        f"{format_money(greeks['GEX'])}"
+    )
+
+    lines.append(
+        f"Vanna Exposure: "
+        f"{format_money(greeks['Vanna'])}"
+    )
+
+    lines.append(
+        f"Charm Exposure: "
+        f"{format_money(greeks['Charm'])}"
+    )
+
+    lines.append(
+        f"Vega Exposure: "
+        f"{format_money(greeks['Vega'])}"
+    )
+
+    lines.append(
+        f"HIRO-like Flow Proxy: "
+        f"{format_money(greeks['HIRO'])}"
+    )
+
+    lines.append(
+        f"ATM IV: "
+        f"{flow['atm_iv'] * 100:.1f}%"
     )
 
     lines.append("")
 
-    lines.append(
-        "━━━━━━━━━━━━━━━━━━"
-    )
+    # --------------------------------------------------------
+    # WALL
+    # --------------------------------------------------------
 
     lines.append(
-        "🎯 <b>OPTION STRUCTURE</b>"
+        "🧱 <b>OPTION WALL</b>"
     )
 
-    lines.append(
-        "━━━━━━━━━━━━━━━━━━"
-    )
+    if walls["call_wall"] is not None:
 
-    lines.append("")
-
-    if call_wall is not None:
+        distance = (
+            (
+                walls["call_wall"]
+                - current_price
+            )
+            / current_price
+            * 100
+        )
 
         lines.append(
-            f"📈 CALL WALL <b>${call_wall:g}</b>"
+            f"📈 Call Wall: "
+            f"${walls['call_wall']:g} "
+            f"(+{distance:.1f}%)"
         )
 
     else:
 
         lines.append(
-            "📈 CALL WALL N/A"
+            "📈 Call Wall: N/A"
         )
 
-    if put_wall is not None:
+    if walls["put_wall"] is not None:
+
+        distance = (
+            (
+                current_price
+                - walls["put_wall"]
+            )
+            / current_price
+            * 100
+        )
 
         lines.append(
-            f"📉 PUT WALL <b>${put_wall:g}</b>"
+            f"📉 Put Wall: "
+            f"${walls['put_wall']:g} "
+            f"(-{distance:.1f}%)"
         )
 
     else:
 
         lines.append(
-            "📉 PUT WALL N/A"
+            "📉 Put Wall: N/A"
         )
 
     lines.append("")
 
-    lines.append(
-        "━━━━━━━━━━━━━━━━━━"
+    # --------------------------------------------------------
+    # TOP FLOW
+    # --------------------------------------------------------
+
+    top_calls, top_puts = find_top_flow(
+        df,
+        current_price
     )
 
     lines.append(
-        "📊 <b>GREEKS</b>"
+        "🔥 <b>TOP CALL FLOW PROXY</b>"
     )
 
-    lines.append(
-        "━━━━━━━━━━━━━━━━━━"
-    )
+    if top_calls.empty:
+
+        lines.append(
+            "없음"
+        )
+
+    else:
+
+        for _, row in top_calls.iterrows():
+
+            lines.append(
+                f"• ${row['strike']:g} "
+                f"| DTE {int(row['DTE'])} "
+                f"| Vol {int(row['volume']):,} "
+                f"| {format_money(row['traded_premium_proxy'])}"
+            )
 
     lines.append("")
 
     lines.append(
-        f"IV       {format_iv(greeks['IV'])}"
+        "🔻 <b>TOP PUT FLOW PROXY</b>"
     )
 
-    lines.append(
-        f"Delta    {format_money(greeks['Delta'])}"
-    )
+    if top_puts.empty:
 
-    lines.append(
-        f"Gamma    {format_money(greeks['Gamma'])}"
-    )
+        lines.append(
+            "없음"
+        )
 
-    lines.append(
-        f"Vanna    {format_money(greeks['Vanna'])}"
-    )
+    else:
 
-    lines.append(
-        f"Charm    {format_money(greeks['Charm'])}"
-    )
+        for _, row in top_puts.iterrows():
 
-    lines.append(
-        f"GEX      {format_money(greeks['GEX'])}"
-    )
-
-    lines.append(
-        f"HIRO*    {format_money(greeks['HIRO'])}"
-    )
+            lines.append(
+                f"• ${row['strike']:g} "
+                f"| DTE {int(row['DTE'])} "
+                f"| Vol {int(row['volume']):,} "
+                f"| {format_money(row['traded_premium_proxy'])}"
+            )
 
     lines.append("")
 
     lines.append(
-        "━━━━━━━━━━━━━━━━━━"
+        "⚠️ 거래대금 Proxy는 "
+        "실제 Buy/Sell 체결 방향이 아닙니다."
     )
 
     lines.append(
-        "🟢 <b>TOP CALL FLOW</b>"
+        "⚠️ GEX는 OI 기반 Dealer Positioning Proxy입니다."
     )
 
     lines.append(
-        "━━━━━━━━━━━━━━━━━━"
-    )
-
-    lines.append("")
-
-    for _, r in calls.iterrows():
-
-        lines.append(
-            f"💚 ${r['strike']:g}C | "
-            f"DTE {int(r['DTE'])}"
-        )
-
-        lines.append(
-            f"Vol {int(r['volume']):,} | "
-            f"OI {int(r['openInterest']):,}"
-        )
-
-        lines.append(
-            f"IV {format_iv(r['IV'])} | "
-            f"Delta {format_greek(r['delta'])}"
-        )
-
-        lines.append(
-            f"Gamma {format_greek(r['gamma'])} | "
-            f"Vanna {format_greek(r['vanna'])}"
-        )
-
-        lines.append(
-            f"Charm {format_greek(r['charm'])}"
-        )
-
-        lines.append(
-            f"GEX {format_money(r['GEX'])} | "
-            f"Premium {format_money(r['premium_flow'])}"
-        )
-
-        lines.append("")
-
-    lines.append(
-        "━━━━━━━━━━━━━━━━━━"
+        "⚠️ HIRO-like Flow는 실제 HIRO가 아닙니다."
     )
 
     lines.append(
-        "🔴 <b>TOP PUT FLOW</b>"
-    )
-
-    lines.append(
-        "━━━━━━━━━━━━━━━━━━"
-    )
-
-    lines.append("")
-
-    for _, r in puts.iterrows():
-
-        lines.append(
-            f"❤️ ${r['strike']:g}P | "
-            f"DTE {int(r['DTE'])}"
-        )
-
-        lines.append(
-            f"Vol {int(r['volume']):,} | "
-            f"OI {int(r['openInterest']):,}"
-        )
-
-        lines.append(
-            f"IV {format_iv(r['IV'])} | "
-            f"Delta {format_greek(r['delta'])}"
-        )
-
-        lines.append(
-            f"Gamma {format_greek(r['gamma'])} | "
-            f"Vanna {format_greek(r['vanna'])}"
-        )
-
-        lines.append(
-            f"Charm {format_greek(r['charm'])}"
-        )
-
-        lines.append(
-            f"GEX {format_money(r['GEX'])} | "
-            f"Premium {format_money(r['premium_flow'])}"
-        )
-
-        lines.append("")
-
-    lines.append(
-        "━━━━━━━━━━━━━━━━━━"
-    )
-
-    lines.append(
-        "🧭 <b>STRUCTURE</b>"
-    )
-
-    lines.append(
-        "━━━━━━━━━━━━━━━━━━"
-    )
-
-    lines.append("")
-
-    lines.append(
-        f"📍 현재가: <b>${current_price:.2f}</b>"
-    )
-
-    if call_wall is not None:
-
-        lines.append(
-            f"🟢 상방 핵심: <b>${call_wall:g}</b>"
-        )
-
-    if put_wall is not None:
-
-        lines.append(
-            f"🔴 하방 핵심: <b>${put_wall:g}</b>"
-        )
-
-    lines.append(
-        f"GEX: {judgement['gex_label']}"
-    )
-
-    lines.append(
-        f"Delta: {judgement['delta_label']}"
-    )
-
-    lines.append(
-        f"HIRO: {judgement['hiro_label']}"
-    )
-
-    lines.append("")
-
-    lines.append(
-        "━━━━━━━━━━━━━━━━━━"
-    )
-
-    lines.append(
-        "🧠 <b>나의 정리</b>"
-    )
-
-    lines.append(
-        "━━━━━━━━━━━━━━━━━━"
-    )
-
-    lines.append("")
-
-    if (
-        put_wall is not None
-        and current_price > put_wall
-    ):
-
-        lines.append(
-            f"현재가는 Put Wall "
-            f"${put_wall:g} 위에 있습니다."
-        )
-
-        lines.append(
-            f"→ ${put_wall:g} 부근이 "
-            f"하방 핵심 구간입니다."
-        )
-
-    if (
-        call_wall is not None
-        and current_price < call_wall
-    ):
-
-        lines.append(
-            f"${call_wall:g} 부근은 "
-            f"상방 핵심 구간입니다."
-        )
-
-        lines.append(
-            f"→ 해당 가격 돌파 여부가 "
-            f"단기 방향성의 핵심입니다."
-        )
-
-    gex = greeks["GEX"]
-
-    if gex > 0:
-
-        lines.append(
-            "GEX는 양수로 계산되어 "
-            "상대적으로 변동성이 억제될 "
-            "가능성이 있습니다."
-        )
-
-    elif gex < 0:
-
-        lines.append(
-            "GEX는 음수로 계산되어 "
-            "가격 움직임과 변동성이 "
-            "확대될 가능성에 주의해야 합니다."
-        )
-
-    if greeks["Delta"] > 0:
-
-        lines.append(
-            "Delta Exposure는 "
-            "상방 우세로 계산됩니다."
-        )
-
-    elif greeks["Delta"] < 0:
-
-        lines.append(
-            "Delta Exposure는 "
-            "하방 우세로 계산됩니다."
-        )
-
-    if greeks["HIRO"] > 0:
-
-        lines.append(
-            "HIRO Proxy는 양수로 "
-            "상방 거래 흐름이 우세합니다."
-        )
-
-    elif greeks["HIRO"] < 0:
-
-        lines.append(
-            "HIRO Proxy는 음수로 "
-            "하방 거래 흐름이 우세합니다."
-        )
-
-    lines.append("")
-
-    lines.append(
-        f"📌 종합 판단: "
-        f"<b>{judgement['overall']}</b>"
-    )
-
-    lines.append("")
-
-    lines.append(
-        "⚠️ Greeks/GEX/Wall은 옵션 데이터 기반 계산값입니다."
-    )
-
-    lines.append(
-        "⚠️ HIRO는 실제 체결 방향 데이터가 없는 "
-        "yfinance 환경의 Proxy입니다."
-    )
-
-    lines.append(
-        "⚠️ 옵션 거래량만으로 실제 BUY/SELL을 확정할 수 없습니다."
+        "⚠️ OI만으로 실제 Long/Short 포지션을 "
+        "확정할 수 없습니다."
     )
 
     return "\n".join(lines)
 
 
 # ============================================================
-# SAVE OPTION SEARCH CSV
+# SAVE OPTION CSV
 # ============================================================
 
 def save_option_csv(
@@ -1383,9 +1769,11 @@ def analyze_ticker(ticker):
 
     print("")
     print("=" * 70)
+
     print(
         f"🔥 OPTION SEARCH : {ticker}"
     )
+
     print("=" * 70)
 
     current_price = get_current_price(
@@ -1393,6 +1781,7 @@ def analyze_ticker(ticker):
     )
 
     if current_price is None:
+
         return None
 
     print("")
@@ -1424,10 +1813,40 @@ def analyze_ticker(ticker):
         current_price
     )
 
+    greeks = (
+        calculate_aggregate_greeks(
+            df
+        )
+    )
+
+    flow = (
+        calculate_flow_summary(
+            df,
+            current_price
+        )
+    )
+
+    walls = (
+        find_walls(
+            df,
+            current_price
+        )
+    )
+
+    quality = (
+        calculate_data_quality(
+            df
+        )
+    )
+
     report = build_report(
         ticker,
         current_price,
-        df
+        df,
+        greeks,
+        flow,
+        walls,
+        quality
     )
 
     print("")
@@ -1438,17 +1857,9 @@ def analyze_ticker(ticker):
         df
     )
 
+    # 개별 종목 Telegram
     telegram_ok = send_telegram(
         report
-    )
-
-    greeks = calculate_aggregate_greeks(
-        df
-    )
-
-    call_wall, put_wall = find_walls(
-        df,
-        current_price
     )
 
     return {
@@ -1456,8 +1867,9 @@ def analyze_ticker(ticker):
         "current_price": current_price,
         "df": df,
         "greeks": greeks,
-        "call_wall": call_wall,
-        "put_wall": put_wall,
+        "flow": flow,
+        "walls": walls,
+        "quality": quality,
         "report": report,
         "csv_file": csv_file,
         "telegram_ok": telegram_ok
@@ -1475,6 +1887,7 @@ def run(ticker):
     )
 
     if result is None:
+
         return False
 
     return result["telegram_ok"]
@@ -1503,6 +1916,7 @@ def main():
     )
 
     if result is None:
+
         sys.exit(1)
 
     print("")
