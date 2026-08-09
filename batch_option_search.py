@@ -17,7 +17,7 @@ from option_search import (
 TOP_ENTRY = 5
 
 ENTRY_SCORE = 70
-WATCH_SCORE = 40
+WATCH_SCORE = 45
 
 
 # ============================================================
@@ -57,14 +57,17 @@ RANKING_FILE = os.path.join(
 
 
 # ============================================================
-# FORMAT MONEY
+# FORMAT
 # ============================================================
 
 def format_money(x):
 
     try:
+
         x = float(x)
+
     except Exception:
+
         return "$0"
 
     sign = ""
@@ -73,6 +76,12 @@ def format_money(x):
 
         sign = "-"
         x = abs(x)
+
+    if x >= 1_000_000_000:
+
+        return (
+            f"{sign}${x / 1_000_000_000:.2f}B"
+        )
 
     if x >= 1_000_000:
 
@@ -96,340 +105,172 @@ def format_money(x):
 # ============================================================
 
 def calculate_score(
-    df,
-    greeks
+    analysis
 ):
+
+    df = analysis["df"]
+
+    greeks = analysis["greeks"]
+
+    flow = analysis["flow"]
+
+    walls = analysis["walls"]
+
+    quality = analysis["quality"]
+
+    current_price = analysis[
+        "current_price"
+    ]
 
     score = 50.0
 
     reasons = []
 
-    calls = df[
-        df["option_type"] == "CALL"
-    ]
+    bullish_signals = 0
+    bearish_signals = 0
 
-    puts = df[
-        df["option_type"] == "PUT"
-    ]
+    # ========================================================
+    # 1. CALL / PUT VOLUME
+    # ========================================================
 
-    # --------------------------------------------------------
-    # PREMIUM
-    # --------------------------------------------------------
-
-    call_premium = calls[
-        "premium_flow"
-    ].sum()
-
-    put_premium = puts[
-        "premium_flow"
-    ].sum()
-
-    total_premium = (
-        call_premium
-        + put_premium
+    volume_ratio = (
+        flow["call_volume_ratio"]
     )
 
-    if total_premium > 0:
-
-        ratio = (
-            call_premium
-            / total_premium
-        )
-
-        if ratio >= 0.60:
-
-            score += 10
-
-            reasons.append(
-                "Call Premium 강세"
-            )
-
-        elif ratio >= 0.55:
-
-            score += 6
-
-            reasons.append(
-                "Call Premium 우세"
-            )
-
-        elif ratio <= 0.40:
-
-            score -= 10
-
-            reasons.append(
-                "Put Premium 강세"
-            )
-
-        elif ratio <= 0.45:
-
-            score -= 6
-
-            reasons.append(
-                "Put Premium 우세"
-            )
-
-    # --------------------------------------------------------
-    # VOLUME
-    # --------------------------------------------------------
-
-    call_volume = calls[
-        "volume"
-    ].sum()
-
-    put_volume = puts[
-        "volume"
-    ].sum()
-
-    total_volume = (
-        call_volume
-        + put_volume
-    )
-
-    if total_volume > 0:
-
-        ratio = (
-            call_volume
-            / total_volume
-        )
-
-        if ratio >= 0.60:
-
-            score += 8
-
-            reasons.append(
-                "Call 거래량 우세"
-            )
-
-        elif ratio <= 0.40:
-
-            score -= 8
-
-            reasons.append(
-                "Put 거래량 우세"
-            )
-
-    # --------------------------------------------------------
-    # OI
-    # --------------------------------------------------------
-
-    call_oi = calls[
-        "openInterest"
-    ].sum()
-
-    put_oi = puts[
-        "openInterest"
-    ].sum()
-
-    total_oi = (
-        call_oi
-        + put_oi
-    )
-
-    if total_oi > 0:
-
-        ratio = (
-            call_oi
-            / total_oi
-        )
-
-        if ratio >= 0.60:
-
-            score += 6
-
-            reasons.append(
-                "Call OI 우세"
-            )
-
-        elif ratio <= 0.40:
-
-            score -= 6
-
-            reasons.append(
-                "Put OI 우세"
-            )
-
-    # --------------------------------------------------------
-    # DTE
-    # --------------------------------------------------------
-
-    dte_0_7 = df[
-        (df["DTE"] >= 0)
-        &
-        (df["DTE"] <= 7)
-    ]
-
-    dte_8_30 = df[
-        (df["DTE"] >= 8)
-        &
-        (df["DTE"] <= 30)
-    ]
-
-    dte_31_60 = df[
-        (df["DTE"] >= 31)
-        &
-        (df["DTE"] <= 60)
-    ]
-
-    dte_61_180 = df[
-        (df["DTE"] >= 61)
-        &
-        (df["DTE"] <= 180)
-    ]
-
-    if (
-        not dte_0_7.empty
-        and dte_8_30.empty
-        and dte_31_60.empty
-        and dte_61_180.empty
-    ):
-
-        score -= 6
-
-        reasons.append(
-            "초단기 DTE 집중"
-        )
-
-    if not dte_8_30.empty:
-
-        score += 2
-
-        reasons.append(
-            "8~30DTE 구조"
-        )
-
-    if not dte_31_60.empty:
-
-        score += 4
-
-        reasons.append(
-            "31~60DTE 구조"
-        )
-
-    if not dte_61_180.empty:
-
-        score += 2
-
-        reasons.append(
-            "61~180DTE 구조"
-        )
-
-    long_calls = calls[
-        calls["DTE"] >= 30
-    ]
-
-    if not long_calls.empty:
-
-        score += 3
-
-        reasons.append(
-            "30D+ Call 구조 존재"
-        )
-
-    # --------------------------------------------------------
-    # DELTA
-    # --------------------------------------------------------
-
-    delta = greeks.get(
-        "Delta",
-        0
-    )
-
-    if abs(delta) > 5_000_000:
-
-        if delta > 0:
-
-            score += 10
-
-            reasons.append(
-                "Delta Exposure 강한 상방"
-            )
-
-        else:
-
-            score -= 10
-
-            reasons.append(
-                "Delta Exposure 강한 하방"
-            )
-
-    elif delta > 0:
+    if volume_ratio >= 0.60:
 
         score += 6
 
+        bullish_signals += 1
+
         reasons.append(
-            "Delta Exposure 상방"
+            "Call 거래량 우세"
+        )
+
+    elif volume_ratio >= 0.55:
+
+        score += 3
+
+        bullish_signals += 1
+
+        reasons.append(
+            "Call 거래량 소폭 우세"
+        )
+
+    elif volume_ratio <= 0.40:
+
+        score -= 6
+
+        bearish_signals += 1
+
+        reasons.append(
+            "Put 거래량 우세"
+        )
+
+    elif volume_ratio <= 0.45:
+
+        score -= 3
+
+        bearish_signals += 1
+
+        reasons.append(
+            "Put 거래량 소폭 우세"
+        )
+
+    # ========================================================
+    # 2. TRADED PREMIUM PROXY
+    # ========================================================
+    #
+    # 실제 BUY/SELL이 아니므로 영향도를 낮춘다.
+    #
+
+    premium_ratio = (
+        flow["call_premium_ratio"]
+    )
+
+    if premium_ratio >= 0.60:
+
+        score += 5
+
+        bullish_signals += 1
+
+        reasons.append(
+            "Call 거래대금 Proxy 우세"
+        )
+
+    elif premium_ratio >= 0.55:
+
+        score += 2
+
+        reasons.append(
+            "Call 거래대금 Proxy 소폭 우세"
+        )
+
+    elif premium_ratio <= 0.40:
+
+        score -= 5
+
+        bearish_signals += 1
+
+        reasons.append(
+            "Put 거래대금 Proxy 우세"
+        )
+
+    elif premium_ratio <= 0.45:
+
+        score -= 2
+
+        reasons.append(
+            "Put 거래대금 Proxy 소폭 우세"
+        )
+
+    # ========================================================
+    # 3. DELTA EXPOSURE PROXY
+    # ========================================================
+
+    delta = float(
+        greeks.get(
+            "Delta",
+            0
+        )
+    )
+
+    if delta > 0:
+
+        score += 7
+
+        bullish_signals += 1
+
+        reasons.append(
+            "OI Delta Exposure Proxy 상방"
         )
 
     elif delta < 0:
 
-        score -= 6
+        score -= 7
+
+        bearish_signals += 1
 
         reasons.append(
-            "Delta Exposure 하방"
+            "OI Delta Exposure Proxy 하방"
         )
 
-    # --------------------------------------------------------
-    # GEX
-    # --------------------------------------------------------
+    # ========================================================
+    # 4. VANNA
+    # ========================================================
 
-    gex = greeks.get(
-        "GEX",
-        0
-    )
-
-    if gex > 0:
-
-        score += 4
-
-        reasons.append(
-            "GEX Positive"
+    vanna = float(
+        greeks.get(
+            "Vanna",
+            0
         )
-
-    elif gex < 0:
-
-        score -= 4
-
-        reasons.append(
-            "GEX Negative"
-        )
-
-    # --------------------------------------------------------
-    # HIRO
-    # --------------------------------------------------------
-
-    hiro = greeks.get(
-        "HIRO",
-        0
-    )
-
-    if hiro > 0:
-
-        score += 4
-
-        reasons.append(
-            "HIRO Proxy Positive"
-        )
-
-    elif hiro < 0:
-
-        score -= 4
-
-        reasons.append(
-            "HIRO Proxy Negative"
-        )
-
-    # --------------------------------------------------------
-    # VANNA
-    # --------------------------------------------------------
-
-    vanna = greeks.get(
-        "Vanna",
-        0
     )
 
     if vanna > 0:
 
         score += 3
+
+        bullish_signals += 1
 
         reasons.append(
             "Vanna 상방"
@@ -439,41 +280,104 @@ def calculate_score(
 
         score -= 3
 
+        bearish_signals += 1
+
         reasons.append(
             "Vanna 하방"
         )
 
-    # --------------------------------------------------------
-    # IV
-    # --------------------------------------------------------
+    # ========================================================
+    # 5. HIRO-LIKE PROXY
+    # ========================================================
+    #
+    # 실제 HIRO가 아니므로 ±2만 반영.
+    #
 
-    iv = greeks.get(
-        "IV",
-        0
+    hiro = float(
+        greeks.get(
+            "HIRO",
+            0
+        )
     )
 
-    try:
+    if hiro > 0:
 
-        iv_pct = float(iv) * 100
+        score += 2
 
-    except Exception:
+        bullish_signals += 1
 
-        iv_pct = 0
+        reasons.append(
+            "체결방향 Flow Proxy 상방"
+        )
+
+    elif hiro < 0:
+
+        score -= 2
+
+        bearish_signals += 1
+
+        reasons.append(
+            "체결방향 Flow Proxy 하방"
+        )
+
+    # ========================================================
+    # 6. GEX REGIME
+    # ========================================================
+    #
+    # GEX는 방향성으로 사용하지 않는다.
+    #
+    # Positive GEX = 상대적으로 가격 안정/감쇠 가능성
+    # Negative GEX = 변동성 확대 가능성
+    #
+
+    gex = float(
+        greeks.get(
+            "GEX",
+            0
+        )
+    )
+
+    if gex > 0:
+
+        reasons.append(
+            "Positive GEX Regime"
+        )
+
+    elif gex < 0:
+
+        reasons.append(
+            "Negative GEX Regime"
+        )
+
+    # ========================================================
+    # 7. ATM IV
+    # ========================================================
+
+    atm_iv = float(
+        flow.get(
+            "atm_iv",
+            0
+        )
+    )
+
+    iv_pct = (
+        atm_iv * 100
+    )
 
     if iv_pct <= 40:
 
-        score += 4
+        score += 3
 
         reasons.append(
-            "IV 낮음"
+            "ATM IV 낮음"
         )
 
     elif iv_pct <= 70:
 
-        score += 2
+        score += 1
 
         reasons.append(
-            "IV 적정"
+            "ATM IV 적정"
         )
 
     elif iv_pct <= 100:
@@ -481,7 +385,7 @@ def calculate_score(
         score -= 2
 
         reasons.append(
-            "IV 높음"
+            "ATM IV 높음"
         )
 
     elif iv_pct <= 150:
@@ -489,7 +393,7 @@ def calculate_score(
         score -= 5
 
         reasons.append(
-            "IV 과열"
+            "ATM IV 과열"
         )
 
     else:
@@ -497,50 +401,161 @@ def calculate_score(
         score -= 8
 
         reasons.append(
-            "IV 극단적"
+            "ATM IV 극단적"
         )
 
-    # --------------------------------------------------------
-    # SIGNAL CONFLICT
-    # --------------------------------------------------------
+    # ========================================================
+    # 8. DTE STRUCTURE
+    # ========================================================
 
-    bullish = 0
-    bearish = 0
+    dte = flow["dte_buckets"]
 
-    if delta > 0:
-        bullish += 1
-    elif delta < 0:
-        bearish += 1
+    if dte["31_60"] > 0:
 
-    if gex > 0:
-        bullish += 1
-    elif gex < 0:
-        bearish += 1
+        score += 2
 
-    if hiro > 0:
-        bullish += 1
-    elif hiro < 0:
-        bearish += 1
+        reasons.append(
+            "31~60DTE 구조 존재"
+        )
 
-    if vanna > 0:
-        bullish += 1
-    elif vanna < 0:
-        bearish += 1
+    if dte["61_180"] > 0:
+
+        score += 1
+
+        reasons.append(
+            "61~180DTE 구조 존재"
+        )
+
+    # ========================================================
+    # 9. WALL / PRICE LOCATION
+    # ========================================================
+
+    call_wall = walls.get(
+        "call_wall"
+    )
+
+    put_wall = walls.get(
+        "put_wall"
+    )
+
+    call_distance = None
+    put_distance = None
+
+    if call_wall is not None:
+
+        call_distance = (
+            (
+                call_wall
+                - current_price
+            )
+            / current_price
+            * 100
+        )
+
+        # 현재가가 Call Wall 바로 아래라면
+        # bullish 방향이어도 진입에는 불리할 수 있다.
+
+        if (
+            0 <= call_distance <= 3
+        ):
+
+            score -= 5
+
+            reasons.append(
+                "Call Wall 바로 아래"
+            )
+
+        elif call_distance >= 8:
+
+            score += 2
+
+            reasons.append(
+                "상방 여유 구간"
+            )
+
+    if put_wall is not None:
+
+        put_distance = (
+            (
+                current_price
+                - put_wall
+            )
+            / current_price
+            * 100
+        )
+
+        if (
+            0 <= put_distance <= 3
+        ):
+
+            score -= 5
+
+            reasons.append(
+                "Put Wall 바로 위"
+            )
+
+        elif put_distance >= 8:
+
+            score += 2
+
+            reasons.append(
+                "하방 완충 여유"
+            )
+
+    # ========================================================
+    # 10. SIGNAL CONFLICT
+    # ========================================================
 
     if (
-        bullish >= 3
-        and bearish >= 1
+        bullish_signals >= 3
+        and bearish_signals >= 2
     ):
 
-        score -= 8
+        score -= 7
 
         reasons.append(
             "⚠️ Signal Conflict"
         )
 
-    # --------------------------------------------------------
+    elif (
+        bearish_signals >= 3
+        and bullish_signals >= 2
+    ):
+
+        score += 0
+
+        reasons.append(
+            "⚠️ Bearish Signal Conflict"
+        )
+
+    # ========================================================
+    # 11. DATA QUALITY
+    # ========================================================
+
+    quality_score = float(
+        quality.get(
+            "score",
+            0
+        )
+    )
+
+    if quality_score < 40:
+
+        score -= 5
+
+        reasons.append(
+            "⚠️ 낮은 데이터 품질"
+        )
+
+    elif quality_score >= 75:
+
+        reasons.append(
+            "데이터 품질 양호"
+        )
+
+    # ========================================================
     # LIMIT
-    # --------------------------------------------------------
+    # ========================================================
 
     score = max(
         0,
@@ -550,50 +565,83 @@ def calculate_score(
         )
     )
 
-    # --------------------------------------------------------
+    # ========================================================
     # DIRECTION
-    # --------------------------------------------------------
+    # ========================================================
 
-    if score >= 70:
+    if (
+        bullish_signals
+        >= bearish_signals + 2
+    ):
 
         direction = "BULLISH"
 
-    elif score >= 55:
-
-        direction = "SLIGHT BULLISH"
-
-    elif score >= 45:
-
-        direction = "NEUTRAL"
-
-    elif score >= 30:
-
-        direction = "SLIGHT BEARISH"
-
-    else:
+    elif (
+        bearish_signals
+        >= bullish_signals + 2
+    ):
 
         direction = "BEARISH"
 
-    return (
-        score,
-        direction,
-        reasons
-    )
+    else:
 
+        direction = "NEUTRAL"
 
-# ============================================================
-# CATEGORY
-# ============================================================
+    # ========================================================
+    # STRUCTURE
+    # ========================================================
 
-def classify(score):
+    if gex > 0:
 
-    if score >= ENTRY_SCORE:
-        return "🟢 오늘 진입 후보"
+        structure = "STABLE_GEX"
 
-    if score >= WATCH_SCORE:
-        return "🟡 관망"
+    elif gex < 0:
 
-    return "🔴 회피"
+        structure = "HIGH_VOL_GEX"
+
+    else:
+
+        structure = "NEUTRAL_GEX"
+
+    # ========================================================
+    # FINAL ACTION
+    # ========================================================
+
+    # Extreme IV에서는 단순 bullish만으로
+    # 진입시키지 않는다.
+
+    if (
+        score >= ENTRY_SCORE
+        and direction == "BULLISH"
+        and iv_pct < 150
+        and quality_score >= 40
+    ):
+
+        category = "🟢 오늘 진입 후보"
+
+    elif (
+        score <= 35
+        or direction == "BEARISH"
+    ):
+
+        category = "🔴 회피"
+
+    else:
+
+        category = "🟡 관망"
+
+    return {
+        "score": score,
+        "direction": direction,
+        "structure": structure,
+        "category": category,
+        "reasons": reasons,
+        "call_distance": call_distance,
+        "put_distance": put_distance,
+        "iv_pct": iv_pct,
+        "bullish_signals": bullish_signals,
+        "bearish_signals": bearish_signals
+    }
 
 
 # ============================================================
@@ -604,47 +652,146 @@ def make_final_result(
     analysis
 ):
 
-    ticker = analysis["ticker"]
-
-    df = analysis["df"]
-
-    greeks = analysis["greeks"]
-
-    (
-        score,
-        direction,
-        reasons
-    ) = calculate_score(
-        df,
-        greeks
+    score_data = calculate_score(
+        analysis
     )
 
-    category = classify(
-        score
-    )
+    greeks = analysis[
+        "greeks"
+    ]
+
+    flow = analysis[
+        "flow"
+    ]
+
+    walls = analysis[
+        "walls"
+    ]
+
+    quality = analysis[
+        "quality"
+    ]
 
     return {
-        "ticker": ticker,
+
+        "ticker":
+            analysis["ticker"],
+
         "current_price":
             analysis["current_price"],
-        "score": score,
-        "direction": direction,
-        "category": category,
-        "reasons": reasons,
+
+        "score":
+            score_data["score"],
+
+        "direction":
+            score_data["direction"],
+
+        "structure":
+            score_data["structure"],
+
+        "category":
+            score_data["category"],
+
+        "reasons":
+            score_data["reasons"],
+
         "delta":
-            greeks.get("Delta", 0),
+            greeks.get(
+                "Delta",
+                0
+            ),
+
         "gex":
-            greeks.get("GEX", 0),
-        "hiro":
-            greeks.get("HIRO", 0),
+            greeks.get(
+                "GEX",
+                0
+            ),
+
         "vanna":
-            greeks.get("Vanna", 0),
-        "iv":
-            greeks.get("IV", 0),
+            greeks.get(
+                "Vanna",
+                0
+            ),
+
+        "charm":
+            greeks.get(
+                "Charm",
+                0
+            ),
+
+        "vega":
+            greeks.get(
+                "Vega",
+                0
+            ),
+
+        "hiro":
+            greeks.get(
+                "HIRO",
+                0
+            ),
+
+        "atm_iv":
+            flow.get(
+                "atm_iv",
+                0
+            ),
+
+        "call_volume_ratio":
+            flow.get(
+                "call_volume_ratio",
+                0.5
+            ),
+
+        "call_oi_ratio":
+            flow.get(
+                "call_oi_ratio",
+                0.5
+            ),
+
+        "call_premium_ratio":
+            flow.get(
+                "call_premium_ratio",
+                0.5
+            ),
+
         "call_wall":
-            analysis["call_wall"],
+            walls.get(
+                "call_wall"
+            ),
+
         "put_wall":
-            analysis["put_wall"]
+            walls.get(
+                "put_wall"
+            ),
+
+        "call_wall_gex":
+            walls.get(
+                "call_wall_gex",
+                0
+            ),
+
+        "put_wall_gex":
+            walls.get(
+                "put_wall_gex",
+                0
+            ),
+
+        "quality":
+            quality.get(
+                "score",
+                0
+            ),
+
+        "bullish_signals":
+            score_data[
+                "bullish_signals"
+            ],
+
+        "bearish_signals":
+            score_data[
+                "bearish_signals"
+            ]
     }
 
 
@@ -652,56 +799,90 @@ def make_final_result(
 # SAVE FINAL CSV
 # ============================================================
 
-def save_ranking(results):
+def save_ranking(
+    results
+):
 
     rows = []
 
     for r in results:
 
-        rows.append(
-            {
-                "ticker":
-                    r["ticker"],
+        rows.append({
 
-                "current_price":
-                    r["current_price"],
+            "ticker":
+                r["ticker"],
 
-                "score":
-                    r["score"],
+            "current_price":
+                r["current_price"],
 
-                "direction":
-                    r["direction"],
+            "score":
+                r["score"],
 
-                "category":
-                    r["category"],
+            "direction":
+                r["direction"],
 
-                "reasons":
-                    " | ".join(
-                        r["reasons"]
-                    ),
+            "structure":
+                r["structure"],
 
-                "delta":
-                    r["delta"],
+            "category":
+                r["category"],
 
-                "gex":
-                    r["gex"],
+            "reasons":
+                " | ".join(
+                    r["reasons"]
+                ),
 
-                "hiro":
-                    r["hiro"],
+            "delta":
+                r["delta"],
 
-                "vanna":
-                    r["vanna"],
+            "gex":
+                r["gex"],
 
-                "iv":
-                    r["iv"],
+            "vanna":
+                r["vanna"],
 
-                "call_wall":
-                    r["call_wall"],
+            "charm":
+                r["charm"],
 
-                "put_wall":
-                    r["put_wall"]
-            }
-        )
+            "vega":
+                r["vega"],
+
+            "hiro":
+                r["hiro"],
+
+            "atm_iv":
+                r["atm_iv"],
+
+            "call_volume_ratio":
+                r["call_volume_ratio"],
+
+            "call_oi_ratio":
+                r["call_oi_ratio"],
+
+            "call_premium_ratio":
+                r["call_premium_ratio"],
+
+            "call_wall":
+                r["call_wall"],
+
+            "put_wall":
+                r["put_wall"],
+
+            "call_wall_gex":
+                r["call_wall_gex"],
+
+            "put_wall_gex":
+                r["put_wall_gex"],
+
+            "data_quality":
+                r["quality"],
+
+            "bullish_signals":
+                r["bullish_signals"],
+
+            "bearish_signals":
+                r["bearish_signals"]
+        })
 
     df = pd.DataFrame(
         rows
@@ -743,7 +924,8 @@ def build_final_message(
     )
 
     lines.append(
-        "🧠 <b>오늘의 OPTION FINAL RANKING</b>"
+        "🧠 <b>오늘의 PORTFOLIO "
+        "OPTION RANKING</b>"
     )
 
     lines.append(
@@ -752,18 +934,19 @@ def build_final_message(
 
     lines.append("")
 
-    # --------------------------------------------------------
+    # ========================================================
     # ENTRY
-    # --------------------------------------------------------
+    # ========================================================
 
     entry = [
         r
         for r in results
-        if r["score"] >= ENTRY_SCORE
+        if r["category"]
+        == "🟢 오늘 진입 후보"
     ][:TOP_ENTRY]
 
     lines.append(
-        "🟢 <b>오늘 살 만한 후보 TOP 5</b>"
+        "🟢 <b>진입 후보 TOP 5</b>"
     )
 
     lines.append("")
@@ -784,7 +967,7 @@ def build_final_message(
             lines.append(
                 "   → "
                 + ", ".join(
-                    r["reasons"][:5]
+                    r["reasons"][:4]
                 )
             )
 
@@ -798,18 +981,15 @@ def build_final_message(
 
         lines.append("")
 
-    # --------------------------------------------------------
+    # ========================================================
     # WATCH
-    # --------------------------------------------------------
+    # ========================================================
 
     watch = [
         r
         for r in results
-        if (
-            WATCH_SCORE
-            <= r["score"]
-            < ENTRY_SCORE
-        )
+        if r["category"]
+        == "🟡 관망"
     ]
 
     lines.append(
@@ -824,8 +1004,9 @@ def build_final_message(
 
             lines.append(
                 f"• {r['ticker']} "
-                f"| {r['score']:.1f}점 "
-                f"| {r['direction']}"
+                f"| {r['score']:.1f} "
+                f"| {r['direction']} "
+                f"| {r['structure']}"
             )
 
     else:
@@ -836,14 +1017,15 @@ def build_final_message(
 
     lines.append("")
 
-    # --------------------------------------------------------
+    # ========================================================
     # AVOID
-    # --------------------------------------------------------
+    # ========================================================
 
     avoid = [
         r
         for r in results
-        if r["score"] < WATCH_SCORE
+        if r["category"]
+        == "🔴 회피"
     ]
 
     lines.append(
@@ -858,7 +1040,7 @@ def build_final_message(
 
             lines.append(
                 f"• {r['ticker']} "
-                f"| {r['score']:.1f}점 "
+                f"| {r['score']:.1f} "
                 f"| {r['direction']}"
             )
 
@@ -870,9 +1052,9 @@ def build_final_message(
 
     lines.append("")
 
-    # --------------------------------------------------------
+    # ========================================================
     # ALL RANKING
-    # --------------------------------------------------------
+    # ========================================================
 
     lines.append(
         "━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -894,17 +1076,17 @@ def build_final_message(
     ):
 
         lines.append(
-            f"{i}. "
-            f"<b>{r['ticker']}</b> "
-            f"| {r['score']:.1f}점 "
+            f"{i}. <b>{r['ticker']}</b> "
+            f"| {r['score']:.1f} "
+            f"| {r['direction']} "
             f"| {r['category']}"
         )
 
     lines.append("")
 
-    # --------------------------------------------------------
-    # TOP 5 DETAIL
-    # --------------------------------------------------------
+    # ========================================================
+    # TOP DETAIL
+    # ========================================================
 
     lines.append(
         "━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -920,63 +1102,28 @@ def build_final_message(
 
     lines.append("")
 
-    for r in entry:
+    for r in results[:TOP_ENTRY]:
 
         lines.append(
             f"📌 <b>{r['ticker']}</b> "
             f"${r['current_price']:.2f}"
         )
 
-        if r["call_wall"] is not None:
+        lines.append(
+            f"🎯 Score "
+            f"{r['score']:.1f} "
+            f"| {r['direction']}"
+        )
 
-            distance = (
-                (
-                    r["call_wall"]
-                    - r["current_price"]
-                )
-                / r["current_price"]
-                * 100
-            )
-
-            lines.append(
-                f"📈 Call Wall "
-                f"${r['call_wall']:g} "
-                f"(+{distance:.1f}%)"
-            )
-
-        else:
-
-            lines.append(
-                "📈 Call Wall N/A"
-            )
-
-        if r["put_wall"] is not None:
-
-            distance = (
-                (
-                    r["current_price"]
-                    - r["put_wall"]
-                )
-                / r["current_price"]
-                * 100
-            )
-
-            lines.append(
-                f"📉 Put Wall "
-                f"${r['put_wall']:g} "
-                f"(-{distance:.1f}%)"
-            )
-
-        else:
-
-            lines.append(
-                "📉 Put Wall N/A"
-            )
+        lines.append(
+            f"🏗 Structure "
+            f"{r['structure']}"
+        )
 
         try:
 
             iv_text = (
-                f"{float(r['iv']) * 100:.1f}%"
+                f"{float(r['atm_iv']) * 100:.1f}%"
             )
 
         except Exception:
@@ -988,34 +1135,65 @@ def build_final_message(
         )
 
         lines.append(
-            f"Delta "
-            f"{format_money(r['delta'])}"
-        )
-
-        lines.append(
             f"GEX "
             f"{format_money(r['gex'])}"
         )
 
+        lines.append(
+            f"Delta Proxy "
+            f"{format_money(r['delta'])}"
+        )
+
+        lines.append(
+            f"Vanna "
+            f"{format_money(r['vanna'])}"
+        )
+
+        if r["call_wall"] is not None:
+
+            lines.append(
+                f"📈 Call Wall "
+                f"${r['call_wall']:g}"
+            )
+
+        else:
+
+            lines.append(
+                "📈 Call Wall N/A"
+            )
+
+        if r["put_wall"] is not None:
+
+            lines.append(
+                f"📉 Put Wall "
+                f"${r['put_wall']:g}"
+            )
+
+        else:
+
+            lines.append(
+                "📉 Put Wall N/A"
+            )
+
         lines.append("")
 
     lines.append(
-        "━━━━━━━━━━━━━━━━━━━━━━━━"
+        "⚠️ GEX / Delta / Vanna는 "
+        "OI 기반 Proxy입니다."
     )
 
     lines.append(
-        "⚠️ Greeks/GEX/Wall은 옵션 데이터 기반 계산값입니다."
+        "⚠️ 거래대금은 실제 Buy/Sell Flow가 아닙니다."
     )
 
     lines.append(
-        "⚠️ HIRO는 yfinance 환경의 Proxy입니다."
+        "⚠️ 무료 yfinance 데이터에는 "
+        "실제 체결 방향 정보가 없습니다."
     )
 
-    lines.append(
-        "⚠️ 옵션 거래량만으로 실제 BUY/SELL을 확정할 수 없습니다."
+    return "\n".join(
+        lines
     )
-
-    return "\n".join(lines)
 
 
 # ============================================================
@@ -1026,18 +1204,22 @@ def main():
 
     print("")
     print("=" * 70)
+
     print(
-        "🔥 OPTION FLOW SCANNER V1"
+        "🔥 PORTFOLIO OPTION SCANNER V2"
     )
+
     print("=" * 70)
 
     print("")
+
     print(
-        f"📊 검색 종목: "
+        f"📊 분석 종목: "
         f"{len(SELECTED_SYMBOLS)}개"
     )
 
     print("")
+
     print(
         "📌 처리 방식:"
     )
@@ -1047,23 +1229,23 @@ def main():
     )
 
     print(
-        "2. 종목별 상세 Telegram"
+        "2. 종목별 CSV"
     )
 
     print(
-        "3. 종목별 CSV 저장"
+        "3. 종목별 Telegram"
     )
 
     print(
-        "4. FINAL SCORE"
+        "4. Direction / Structure / IV 분석"
     )
 
     print(
-        "5. 전체 Ranking"
+        "5. FINAL SCORE"
     )
 
     print(
-        "6. TOP 5"
+        "6. 전체 Ranking"
     )
 
     print(
@@ -1093,8 +1275,7 @@ def main():
         print("=" * 70)
 
         print(
-            f"🔥 {i}/{total} "
-            f"{ticker}"
+            f"🔥 {i}/{total} {ticker}"
         )
 
         print("=" * 70)
@@ -1127,13 +1308,18 @@ def main():
 
             print(
                 f"🎯 {ticker} "
-                f"FINAL SCORE: "
+                f"SCORE: "
                 f"{final_result['score']:.1f}"
             )
 
             print(
                 f"   방향: "
                 f"{final_result['direction']}"
+            )
+
+            print(
+                f"   구조: "
+                f"{final_result['structure']}"
             )
 
             print(
@@ -1144,8 +1330,9 @@ def main():
         except Exception as e:
 
             print("")
+
             print(
-                f"❌ {ticker} 전체 분석 실패"
+                f"❌ {ticker} 분석 실패"
             )
 
             print(
@@ -1155,6 +1342,7 @@ def main():
         if i < total:
 
             print("")
+
             print(
                 "⏳ 다음 종목 준비..."
             )
@@ -1167,23 +1355,24 @@ def main():
 
     print("")
     print("=" * 70)
+
     print(
         "📊 ALL OPTION SEARCH FINISHED"
     )
+
     print("=" * 70)
 
     print("")
 
     print(
-        f"✅ 최종 분석 완료: "
+        f"✅ 분석 완료: "
         f"{len(results)}개"
     )
 
     if not results:
 
-        print("")
         print(
-            "❌ 분석 결과가 하나도 없습니다."
+            "❌ 분석 결과가 없습니다."
         )
 
         raise SystemExit(1)
@@ -1207,7 +1396,7 @@ def main():
     )
 
     # ========================================================
-    # MESSAGE
+    # FINAL MESSAGE
     # ========================================================
 
     final_message = (
@@ -1218,12 +1407,15 @@ def main():
 
     print("")
     print("=" * 70)
+
     print(
-        "🧠 FINAL OPTION RANKING"
+        "🧠 FINAL PORTFOLIO RANKING"
     )
+
     print("=" * 70)
 
     print("")
+
     print(
         final_message
     )
@@ -1234,9 +1426,11 @@ def main():
 
     print("")
     print("=" * 70)
+
     print(
         "📱 FINAL TELEGRAM"
     )
+
     print("=" * 70)
 
     telegram_ok = send_telegram(
@@ -1261,9 +1455,11 @@ def main():
 
     print("")
     print("=" * 70)
+
     print(
-        "🔥 OPTION FLOW SCANNER V1 COMPLETE"
+        "🔥 PORTFOLIO OPTION SCANNER V2 COMPLETE"
     )
+
     print("=" * 70)
 
 
