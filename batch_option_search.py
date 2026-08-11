@@ -1,5 +1,6 @@
 import os
 import time
+
 import pandas as pd
 
 from selected_symbols import SELECTED_SYMBOLS
@@ -21,6 +22,7 @@ from signal_history import (
     get_signal_stats,
     format_signal_stats
 )
+
 
 # ============================================================
 # CONFIG
@@ -62,6 +64,7 @@ os.makedirs(
     exist_ok=True
 )
 
+
 RANKING_FILE = os.path.join(
     RESULT_DIR,
     "OPTION_FINAL_RANKING.csv"
@@ -69,23 +72,19 @@ RANKING_FILE = os.path.join(
 
 
 # ============================================================
-# FORMAT
+# FORMAT MONEY
 # ============================================================
 
 def format_money(x):
 
     try:
-
         x = float(x)
-
     except Exception:
-
         return "$0"
 
     sign = ""
 
     if x < 0:
-
         sign = "-"
         x = abs(x)
 
@@ -141,12 +140,16 @@ def calculate_score(
     bullish_signals = 0
     bearish_signals = 0
 
+
     # ========================================================
     # 1. CALL / PUT VOLUME
     # ========================================================
 
     volume_ratio = (
-        flow["call_volume_ratio"]
+        flow.get(
+            "call_volume_ratio",
+            0.5
+        )
     )
 
     if volume_ratio >= 0.60:
@@ -189,15 +192,16 @@ def calculate_score(
             "Put 거래량 소폭 우세"
         )
 
+
     # ========================================================
     # 2. TRADED PREMIUM PROXY
     # ========================================================
-    #
-    # 실제 BUY/SELL이 아니므로 영향도를 낮춘다.
-    #
 
     premium_ratio = (
-        flow["call_premium_ratio"]
+        flow.get(
+            "call_premium_ratio",
+            0.5
+        )
     )
 
     if premium_ratio >= 0.60:
@@ -236,6 +240,7 @@ def calculate_score(
             "Put 거래대금 Proxy 소폭 우세"
         )
 
+
     # ========================================================
     # 3. DELTA EXPOSURE PROXY
     # ========================================================
@@ -266,6 +271,7 @@ def calculate_score(
         reasons.append(
             "OI Delta Exposure Proxy 하방"
         )
+
 
     # ========================================================
     # 4. VANNA
@@ -298,12 +304,10 @@ def calculate_score(
             "Vanna 하방"
         )
 
+
     # ========================================================
     # 5. HIRO-LIKE PROXY
     # ========================================================
-    #
-    # 실제 HIRO가 아니므로 ±2만 반영.
-    #
 
     hiro = float(
         greeks.get(
@@ -332,15 +336,10 @@ def calculate_score(
             "체결방향 Flow Proxy 하방"
         )
 
+
     # ========================================================
-    # 6. GEX REGIME
+    # 6. GEX
     # ========================================================
-    #
-    # GEX는 방향성으로 사용하지 않는다.
-    #
-    # Positive GEX = 상대적으로 가격 안정/감쇠 가능성
-    # Negative GEX = 변동성 확대 가능성
-    #
 
     gex = float(
         greeks.get(
@@ -360,6 +359,7 @@ def calculate_score(
         reasons.append(
             "Negative GEX Regime"
         )
+
 
     # ========================================================
     # 7. ATM IV
@@ -416,13 +416,17 @@ def calculate_score(
             "ATM IV 극단적"
         )
 
+
     # ========================================================
-    # 8. DTE STRUCTURE
+    # 8. DTE
     # ========================================================
 
-    dte = flow["dte_buckets"]
+    dte = flow.get(
+        "dte_buckets",
+        {}
+    )
 
-    if dte["31_60"] > 0:
+    if dte.get("31_60", 0) > 0:
 
         score += 2
 
@@ -430,7 +434,7 @@ def calculate_score(
             "31~60DTE 구조 존재"
         )
 
-    if dte["61_180"] > 0:
+    if dte.get("61_180", 0) > 0:
 
         score += 1
 
@@ -438,8 +442,9 @@ def calculate_score(
             "61~180DTE 구조 존재"
         )
 
+
     # ========================================================
-    # 9. WALL / PRICE LOCATION
+    # 9. WALL
     # ========================================================
 
     call_wall = walls.get(
@@ -453,7 +458,12 @@ def calculate_score(
     call_distance = None
     put_distance = None
 
-    if call_wall is not None:
+
+    if (
+        call_wall is not None
+        and current_price
+        and current_price > 0
+    ):
 
         call_distance = (
             (
@@ -463,9 +473,6 @@ def calculate_score(
             / current_price
             * 100
         )
-
-        # 현재가가 Call Wall 바로 아래라면
-        # bullish 방향이어도 진입에는 불리할 수 있다.
 
         if (
             0 <= call_distance <= 3
@@ -485,7 +492,12 @@ def calculate_score(
                 "상방 여유 구간"
             )
 
-    if put_wall is not None:
+
+    if (
+        put_wall is not None
+        and current_price
+        and current_price > 0
+    ):
 
         put_distance = (
             (
@@ -514,6 +526,7 @@ def calculate_score(
                 "하방 완충 여유"
             )
 
+
     # ========================================================
     # 10. SIGNAL CONFLICT
     # ========================================================
@@ -534,11 +547,10 @@ def calculate_score(
         and bullish_signals >= 2
     ):
 
-        score += 0
-
         reasons.append(
             "⚠️ Bearish Signal Conflict"
         )
+
 
     # ========================================================
     # 11. DATA QUALITY
@@ -565,6 +577,7 @@ def calculate_score(
             "데이터 품질 양호"
         )
 
+
     # ========================================================
     # LIMIT
     # ========================================================
@@ -576,6 +589,7 @@ def calculate_score(
             score
         )
     )
+
 
     # ========================================================
     # DIRECTION
@@ -599,6 +613,7 @@ def calculate_score(
 
         direction = "NEUTRAL"
 
+
     # ========================================================
     # STRUCTURE
     # ========================================================
@@ -615,12 +630,10 @@ def calculate_score(
 
         structure = "NEUTRAL_GEX"
 
+
     # ========================================================
     # FINAL ACTION
     # ========================================================
-
-    # Extreme IV에서는 단순 bullish만으로
-    # 진입시키지 않는다.
 
     if (
         score >= ENTRY_SCORE
@@ -642,17 +655,38 @@ def calculate_score(
 
         category = "🟡 관망"
 
+
     return {
-        "score": score,
-        "direction": direction,
-        "structure": structure,
-        "category": category,
-        "reasons": reasons,
-        "call_distance": call_distance,
-        "put_distance": put_distance,
-        "iv_pct": iv_pct,
-        "bullish_signals": bullish_signals,
-        "bearish_signals": bearish_signals
+
+        "score":
+            score,
+
+        "direction":
+            direction,
+
+        "structure":
+            structure,
+
+        "category":
+            category,
+
+        "reasons":
+            reasons,
+
+        "call_distance":
+            call_distance,
+
+        "put_distance":
+            put_distance,
+
+        "iv_pct":
+            iv_pct,
+
+        "bullish_signals":
+            bullish_signals,
+
+        "bearish_signals":
+            bearish_signals
     }
 
 
@@ -683,6 +717,7 @@ def make_final_result(
     quality = analysis[
         "quality"
     ]
+
 
     return {
 
@@ -803,7 +838,25 @@ def make_final_result(
         "bearish_signals":
             score_data[
                 "bearish_signals"
-            ]
+            ],
+
+        # ====================================================
+        # NEW
+        # OI CHANGE
+        # ====================================================
+
+        "oi_change":
+            analysis.get(
+                "oi_change"
+            ),
+
+        # ====================================================
+        # NEW
+        # SIGNAL BACKTEST
+        # ====================================================
+
+        "signal_stats":
+            None
     }
 
 
@@ -819,7 +872,11 @@ def save_ranking(
 
     for r in results:
 
-        rows.append({
+        oi = r.get(
+            "oi_change"
+        )
+
+        row = {
 
             "ticker":
                 r["ticker"],
@@ -894,7 +951,157 @@ def save_ranking(
 
             "bearish_signals":
                 r["bearish_signals"]
-        })
+        }
+
+
+        # ====================================================
+        # OI CSV
+        # ====================================================
+
+        if oi:
+
+            current = oi.get(
+                "current",
+                {}
+            )
+
+            row["current_call_oi"] = (
+                current.get(
+                    "call_oi",
+                    0
+                )
+            )
+
+            row["current_put_oi"] = (
+                current.get(
+                    "put_oi",
+                    0
+                )
+            )
+
+            row["current_total_oi"] = (
+                current.get(
+                    "total_oi",
+                    0
+                )
+            )
+
+            row["call_oi_change"] = (
+                oi.get(
+                    "call_change"
+                )
+            )
+
+            row["put_oi_change"] = (
+                oi.get(
+                    "put_change"
+                )
+            )
+
+            row["total_oi_change"] = (
+                oi.get(
+                    "total_change"
+                )
+            )
+
+            row["call_oi_change_pct"] = (
+                oi.get(
+                    "call_change_pct"
+                )
+            )
+
+            row["put_oi_change_pct"] = (
+                oi.get(
+                    "put_change_pct"
+                )
+            )
+
+            row["total_oi_change_pct"] = (
+                oi.get(
+                    "total_change_pct"
+                )
+            )
+
+            row["call_ratio_change"] = (
+                oi.get(
+                    "call_ratio_change"
+                )
+            )
+
+        else:
+
+            row["current_call_oi"] = None
+            row["current_put_oi"] = None
+            row["current_total_oi"] = None
+            row["call_oi_change"] = None
+            row["put_oi_change"] = None
+            row["total_oi_change"] = None
+            row["call_oi_change_pct"] = None
+            row["put_oi_change_pct"] = None
+            row["total_oi_change_pct"] = None
+            row["call_ratio_change"] = None
+
+
+        # ====================================================
+        # BACKTEST CSV
+        # ====================================================
+
+        stats = r.get(
+            "signal_stats"
+        )
+
+        if stats:
+
+            row["backtest_samples"] = (
+                stats.get(
+                    "samples"
+                )
+            )
+
+            row["backtest_confidence"] = (
+                stats.get(
+                    "confidence"
+                )
+            )
+
+            for days in [1, 3, 5]:
+
+                item = stats[
+                    "stats"
+                ][days]
+
+                row[
+                    f"backtest_{days}d_win_rate"
+                ] = item.get(
+                    "win_rate"
+                )
+
+                row[
+                    f"backtest_{days}d_samples"
+                ] = item.get(
+                    "count"
+                )
+
+        else:
+
+            row["backtest_samples"] = None
+            row["backtest_confidence"] = None
+
+            for days in [1, 3, 5]:
+
+                row[
+                    f"backtest_{days}d_win_rate"
+                ] = None
+
+                row[
+                    f"backtest_{days}d_samples"
+                ] = None
+
+
+        rows.append(
+            row
+        )
+
 
     df = pd.DataFrame(
         rows
@@ -906,9 +1113,10 @@ def save_ranking(
         encoding="utf-8-sig"
     )
 
+
     print("")
     print(
-        f"💾 FINAL CSV 저장:"
+        "💾 FINAL CSV 저장:"
     )
 
     print(
@@ -922,7 +1130,72 @@ def save_ranking(
 
 
 # ============================================================
-# FINAL TELEGRAM
+# OI SUMMARY
+# ============================================================
+
+def get_oi_message(
+    ticker,
+    oi_change
+):
+
+    if not oi_change:
+
+        return ""
+
+    try:
+
+        return format_oi_change(
+            ticker,
+            oi_change
+        )
+
+    except Exception as e:
+
+        print(
+            f"⚠️ {ticker} "
+            f"OI 메시지 생성 실패: {e}"
+        )
+
+        return ""
+
+
+# ============================================================
+# BACKTEST SUMMARY
+# ============================================================
+
+def get_backtest_message(
+    ticker,
+    stats
+):
+
+    if not stats:
+
+        return (
+            "🧠 <b>SIGNAL BACKTEST</b>\n"
+            "아직 과거 유사 신호 데이터가 부족합니다."
+        )
+
+    try:
+
+        return format_signal_stats(
+            stats
+        )
+
+    except Exception as e:
+
+        print(
+            f"⚠️ {ticker} "
+            f"Backtest 메시지 생성 실패: {e}"
+        )
+
+        return (
+            "🧠 <b>SIGNAL BACKTEST</b>\n"
+            "통계 계산 실패"
+        )
+
+
+# ============================================================
+# FINAL TELEGRAM MESSAGE
 # ============================================================
 
 def build_final_message(
@@ -930,6 +1203,11 @@ def build_final_message(
 ):
 
     lines = []
+
+
+    # ========================================================
+    # HEADER
+    # ========================================================
 
     lines.append(
         "━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -946,6 +1224,7 @@ def build_final_message(
 
     lines.append("")
 
+
     # ========================================================
     # ENTRY
     # ========================================================
@@ -957,11 +1236,13 @@ def build_final_message(
         == "🟢 오늘 진입 후보"
     ][:TOP_ENTRY]
 
+
     lines.append(
         "🟢 <b>진입 후보 TOP 5</b>"
     )
 
     lines.append("")
+
 
     if entry:
 
@@ -993,6 +1274,7 @@ def build_final_message(
 
         lines.append("")
 
+
     # ========================================================
     # WATCH
     # ========================================================
@@ -1004,11 +1286,13 @@ def build_final_message(
         == "🟡 관망"
     ]
 
+
     lines.append(
         "🟡 <b>관망</b>"
     )
 
     lines.append("")
+
 
     if watch:
 
@@ -1029,6 +1313,7 @@ def build_final_message(
 
     lines.append("")
 
+
     # ========================================================
     # AVOID
     # ========================================================
@@ -1040,11 +1325,13 @@ def build_final_message(
         == "🔴 회피"
     ]
 
+
     lines.append(
         "🔴 <b>회피</b>"
     )
 
     lines.append("")
+
 
     if avoid:
 
@@ -1064,6 +1351,7 @@ def build_final_message(
 
     lines.append("")
 
+
     # ========================================================
     # ALL RANKING
     # ========================================================
@@ -1082,6 +1370,7 @@ def build_final_message(
 
     lines.append("")
 
+
     for i, r in enumerate(
         results,
         1
@@ -1094,7 +1383,9 @@ def build_final_message(
             f"| {r['category']}"
         )
 
+
     lines.append("")
+
 
     # ========================================================
     # TOP DETAIL
@@ -1114,6 +1405,7 @@ def build_final_message(
 
     lines.append("")
 
+
     for r in results[:TOP_ENTRY]:
 
         lines.append(
@@ -1132,6 +1424,11 @@ def build_final_message(
             f"{r['structure']}"
         )
 
+
+        # ====================================================
+        # IV
+        # ====================================================
+
         try:
 
             iv_text = (
@@ -1142,9 +1439,15 @@ def build_final_message(
 
             iv_text = "N/A"
 
+
         lines.append(
             f"IV {iv_text}"
         )
+
+
+        # ====================================================
+        # GREEKS
+        # ====================================================
 
         lines.append(
             f"GEX "
@@ -1161,6 +1464,11 @@ def build_final_message(
             f"{format_money(r['vanna'])}"
         )
 
+
+        # ====================================================
+        # WALLS
+        # ====================================================
+
         if r["call_wall"] is not None:
 
             lines.append(
@@ -1173,6 +1481,7 @@ def build_final_message(
             lines.append(
                 "📈 Call Wall N/A"
             )
+
 
         if r["put_wall"] is not None:
 
@@ -1187,7 +1496,54 @@ def build_final_message(
                 "📉 Put Wall N/A"
             )
 
+
+        # ====================================================
+        # OI STRUCTURE
+        # ====================================================
+
+        oi_message = get_oi_message(
+            r["ticker"],
+            r.get("oi_change")
+        )
+
+        if oi_message:
+
+            lines.append("")
+
+            lines.extend(
+                oi_message.splitlines()
+            )
+
+
+        # ====================================================
+        # SIGNAL BACKTEST
+        # ====================================================
+
+        if (
+            r["category"]
+            == "🟢 오늘 진입 후보"
+        ):
+
+            stats = r.get(
+                "signal_stats"
+            )
+
+            lines.append("")
+
+            lines.extend(
+                get_backtest_message(
+                    r["ticker"],
+                    stats
+                ).splitlines()
+            )
+
+
         lines.append("")
+
+
+    # ========================================================
+    # DISCLAIMER
+    # ========================================================
 
     lines.append(
         "⚠️ GEX / Delta / Vanna는 "
@@ -1202,6 +1558,17 @@ def build_final_message(
         "⚠️ 무료 yfinance 데이터에는 "
         "실제 체결 방향 정보가 없습니다."
     )
+
+    lines.append(
+        "⚠️ 승률은 과거 유사 진입 신호의 "
+        "실제 가격 결과 기반입니다."
+    )
+
+    lines.append(
+        "⚠️ 과거 표본이 부족하면 "
+        "승률을 표시하지 않습니다."
+    )
+
 
     return "\n".join(
         lines
@@ -1218,12 +1585,13 @@ def main():
     print("=" * 70)
 
     print(
-        "🔥 PORTFOLIO OPTION SCANNER V2"
+        "🔥 PORTFOLIO OPTION SCANNER V3"
     )
 
     print("=" * 70)
 
     print("")
+
 
     print(
         f"📊 분석 종목: "
@@ -1231,6 +1599,7 @@ def main():
     )
 
     print("")
+
 
     print(
         "📌 처리 방식:"
@@ -1249,28 +1618,71 @@ def main():
     )
 
     print(
-        "4. Direction / Structure / IV 분석"
+        "4. OI 전일 대비 변화"
     )
 
     print(
-        "5. FINAL SCORE"
+        "5. Direction / Structure / IV"
     )
 
     print(
-        "6. 전체 Ranking"
+        "6. FINAL SCORE"
     )
 
     print(
-        "7. 최종 Telegram"
+        "7. SIGNAL BACKTEST"
+    )
+
+    print(
+        "8. 전체 Ranking"
+    )
+
+    print(
+        "9. 최종 Telegram"
     )
 
     print("")
 
+
+    # ========================================================
+    # UPDATE OLD SIGNAL RESULTS FIRST
+    # ========================================================
+
+    print(
+        "📈 과거 진입 신호 결과 업데이트..."
+    )
+
+    try:
+
+        update_signal_results()
+
+        print(
+            "✅ SIGNAL_HISTORY 업데이트 완료"
+        )
+
+    except Exception as e:
+
+        print(
+            f"⚠️ SIGNAL_HISTORY 업데이트 실패: {e}"
+        )
+
+
+    # ========================================================
+    # RESULTS
+    # ========================================================
+
     results = []
+
+    processed_tickers = set()
 
     total = len(
         SELECTED_SYMBOLS
     )
+
+
+    # ========================================================
+    # EACH TICKER
+    # ========================================================
 
     for i, ticker in enumerate(
         SELECTED_SYMBOLS,
@@ -1283,6 +1695,24 @@ def main():
             .strip()
         )
 
+
+        # ====================================================
+        # DUPLICATE PROTECTION
+        # ====================================================
+
+        if ticker in processed_tickers:
+
+            print(
+                f"⚠️ {ticker} 중복 → 스킵"
+            )
+
+            continue
+
+        processed_tickers.add(
+            ticker
+        )
+
+
         print("")
         print("=" * 70)
 
@@ -1292,30 +1722,11 @@ def main():
 
         print("=" * 70)
 
-        if analysis:
 
-            try:
+        # ====================================================
+        # ANALYZE FIRST
+        # ====================================================
 
-                oi_change = calculate_oi_change(
-                ticker,
-                analysis["df"]
-                )
-
-                analysis["oi_change"] = oi_change
-
-                save_oi_snapshot(
-                    ticker,
-                    analysis["df"]
-                )
-
-            except Exception as e:
-
-                print(
-                    f"⚠️ {ticker} OI 분석 실패: {e}"
-                )
-
-                analysis["oi_change"] = None
-        
         try:
 
             analysis = analyze_ticker(
@@ -1330,15 +1741,147 @@ def main():
 
                 continue
 
+
+            # =================================================
+            # OI CHANGE
+            #
+            # 반드시 SAVE 전에 비교한다.
+            # =================================================
+
+            try:
+
+                oi_change = (
+                    calculate_oi_change(
+                        ticker,
+                        analysis["df"]
+                    )
+                )
+
+                analysis[
+                    "oi_change"
+                ] = oi_change
+
+
+                # 현재 OI 저장
+                save_oi_snapshot(
+                    ticker,
+                    analysis["df"]
+                )
+
+
+                print(
+                    f"📊 {ticker} "
+                    f"OI 비교 완료"
+                )
+
+            except Exception as e:
+
+                print(
+                    f"⚠️ {ticker} "
+                    f"OI 분석 실패: {e}"
+                )
+
+                analysis[
+                    "oi_change"
+                ] = None
+
+
+            # =================================================
+            # FINAL SCORE
+            # =================================================
+
             final_result = (
                 make_final_result(
                     analysis
                 )
             )
 
+
+            # =================================================
+            # RECORD SIGNAL
+            #
+            # 🟢 진입 후보만 저장
+            # =================================================
+
+            if (
+                final_result["category"]
+                == "🟢 오늘 진입 후보"
+            ):
+
+                try:
+
+                    record_signal(
+                        ticker=ticker,
+                        score=final_result[
+                            "score"
+                        ],
+                        direction=final_result[
+                            "direction"
+                        ],
+                        category=final_result[
+                            "category"
+                        ],
+                        current_price=final_result[
+                            "current_price"
+                        ]
+                    )
+
+                    print(
+                        f"📌 {ticker} "
+                        f"진입 신호 기록"
+                    )
+
+                except Exception as e:
+
+                    print(
+                        f"⚠️ {ticker} "
+                        f"신호 기록 실패: {e}"
+                    )
+
+
+            # =================================================
+            # BACKTEST
+            #
+            # 오늘 방금 기록한 신호는
+            # 미래 가격이 없으므로 통계에는 자동 제외.
+            # =================================================
+
+            try:
+
+                stats = get_signal_stats(
+                    ticker=ticker,
+                    score=final_result[
+                        "score"
+                    ],
+                    direction=final_result[
+                        "direction"
+                    ]
+                )
+
+                final_result[
+                    "signal_stats"
+                ] = stats
+
+            except Exception as e:
+
+                print(
+                    f"⚠️ {ticker} "
+                    f"Backtest 계산 실패: {e}"
+                )
+
+                final_result[
+                    "signal_stats"
+                ] = None
+
+
+            # =================================================
+            # ADD RESULT
+            # =================================================
+
             results.append(
                 final_result
             )
+
 
             print("")
 
@@ -1363,6 +1906,7 @@ def main():
                 f"{final_result['category']}"
             )
 
+
         except Exception as e:
 
             print("")
@@ -1375,6 +1919,11 @@ def main():
                 f"   {type(e).__name__}: {e}"
             )
 
+
+        # ====================================================
+        # DELAY
+        # ====================================================
+
         if i < total:
 
             print("")
@@ -1384,6 +1933,7 @@ def main():
             )
 
             time.sleep(3)
+
 
     # ========================================================
     # CHECK
@@ -1400,10 +1950,12 @@ def main():
 
     print("")
 
+
     print(
         f"✅ 분석 완료: "
         f"{len(results)}개"
     )
+
 
     if not results:
 
@@ -1412,6 +1964,7 @@ def main():
         )
 
         raise SystemExit(1)
+
 
     # ========================================================
     # SORT
@@ -1423,6 +1976,7 @@ def main():
         reverse=True
     )
 
+
     # ========================================================
     # SAVE
     # ========================================================
@@ -1430,6 +1984,7 @@ def main():
     save_ranking(
         results
     )
+
 
     # ========================================================
     # FINAL MESSAGE
@@ -1440,6 +1995,7 @@ def main():
             results
         )
     )
+
 
     print("")
     print("=" * 70)
@@ -1456,6 +2012,7 @@ def main():
         final_message
     )
 
+
     # ========================================================
     # FINAL TELEGRAM
     # ========================================================
@@ -1469,9 +2026,11 @@ def main():
 
     print("=" * 70)
 
+
     telegram_ok = send_telegram(
         final_message
     )
+
 
     if telegram_ok:
 
@@ -1485,6 +2044,7 @@ def main():
             "⚠️ 최종 Telegram 전송 실패"
         )
 
+
     # ========================================================
     # DONE
     # ========================================================
@@ -1493,11 +2053,15 @@ def main():
     print("=" * 70)
 
     print(
-        "🔥 PORTFOLIO OPTION SCANNER V2 COMPLETE"
+        "🔥 PORTFOLIO OPTION SCANNER V3 COMPLETE"
     )
 
     print("=" * 70)
 
+
+# ============================================================
+# RUN
+# ============================================================
 
 if __name__ == "__main__":
 
