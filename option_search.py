@@ -2636,26 +2636,31 @@ def save_option_csv(
 # ============================================================
 # TELEGRAM
 # ============================================================
-
 def send_telegram(text):
 
     if not BOT_TOKEN:
-        print("⚠️ TELEGRAM_BOT_TOKEN이 없습니다.")
+        print(
+            "⚠️ TELEGRAM_BOT_TOKEN이 없습니다."
+        )
         return False
 
     if not CHAT_ID:
-        print("⚠️ TELEGRAM_CHAT_ID가 없습니다.")
+        print(
+            "⚠️ TELEGRAM_CHAT_ID가 없습니다."
+        )
         return False
 
     if not text:
-        print("⚠️ Telegram 메시지가 비어 있습니다.")
+        print(
+            "⚠️ Telegram 메시지가 비어 있습니다."
+        )
         return False
 
     MAX_LENGTH = 3800
 
-    # ------------------------------------------------------------
+    # ========================================================
     # MESSAGE SPLIT
-    # ------------------------------------------------------------
+    # ========================================================
 
     chunks = []
 
@@ -2669,14 +2674,19 @@ def send_telegram(text):
 
         for line in text.splitlines(True):
 
-            if len(current) + len(line) <= MAX_LENGTH:
+            if (
+                len(current) + len(line)
+                <= MAX_LENGTH
+            ):
 
                 current += line
 
             else:
 
                 if current:
-                    chunks.append(current)
+                    chunks.append(
+                        current
+                    )
 
                 # 한 줄 자체가 너무 긴 경우
                 while len(line) > MAX_LENGTH:
@@ -2685,20 +2695,27 @@ def send_telegram(text):
                         line[:MAX_LENGTH]
                     )
 
-                    line = line[MAX_LENGTH:]
+                    line = line[
+                        MAX_LENGTH:
+                    ]
 
                 current = line
 
         if current:
             chunks.append(current)
 
-    # ------------------------------------------------------------
-    # SEND
-    # ------------------------------------------------------------
+    # ========================================================
+    # TELEGRAM SEND
+    # ========================================================
 
     total = len(chunks)
 
     success = True
+
+    url = (
+        "https://api.telegram.org/"
+        f"bot{BOT_TOKEN}/sendMessage"
+    )
 
     for index, chunk in enumerate(
         chunks,
@@ -2717,11 +2734,6 @@ def send_telegram(text):
             "text": chunk,
             "parse_mode": "HTML"
         }
-
-        url = (
-            "https://api.telegram.org/"
-            f"bot{BOT_TOKEN}/sendMessage"
-        )
 
         try:
 
