@@ -72,6 +72,20 @@ os.makedirs(
     exist_ok=True
 )
 
+# ============================================================
+# OI HISTORY
+# ============================================================
+
+OI_HISTORY_DIR = os.path.join(
+    RESULT_DIR,
+    "oi_history"
+)
+
+os.makedirs(
+    OI_HISTORY_DIR,
+    exist_ok=True
+)
+
 
 # ============================================================
 # FORMAT
@@ -272,6 +286,226 @@ def get_current_price(ticker):
     if context is None:
         return None
     return context["option_analysis_price"]
+
+
+
+# ============================================================
+# OI HISTORY / OI DELTA
+# ============================================================
+
+def get_oi_snapshot_path(ticker, snapshot_date=None):
+    if snapshot_date is None:
+        snapshot_date = date.today()
+    return os.path.join(
+        OI_HISTORY_DIR,
+        f"{ticker.upper().strip()}_OI_{snapshot_date.strftime('%Y%m%d')}.csv"
+    )
+
+
+def build_oi_snapshot(df):
+    cols = ["expiration", "DTE", "strike", "option_type", "openInterest"]
+    snapshot = df[cols].copy()
+    snapshot["expiration"] = snapshot["expiration"].astype(str)
+    snapshot["option_type"] = snapshot["option_type"].astype(str)
+    snapshot["strike"] = pd.to_numeric(snapshot["strike"], errors="coerce")
+    snapshot["DTE"] = pd.to_numeric(snapshot["DTE"], errors="coerce")
+    snapshot["openInterest"] = pd.to_numeric(
+        snapshot["openInterest"], errors="coerce"
+    ).fillna(0).clip(lower=0)
+    snapshot = snapshot.dropna(
+        subset=["expiration", "strike", "option_type"]
+    )
+    return snapshot.drop_duplicates(
+        subset=["expiration", "strike", "option_type"],
+        keep="last"
+    )
+
+
+def find_previous_oi_snapshot(ticker, current_date=None):
+    import glob
+    if current_date is None:
+        current_date = date.today()
+
+    pattern = os.path.join(
+        OI_HISTORY_DIR,
+        f"{ticker.upper().strip()}_OI_*.csv"
+    )
+
+    candidates = []
+    for path in glob.glob(pattern):
+        match = re.search(
+            r"_OI_(\d{8})\.csv$",
+            os.path.basename(path)
+        )
+        if not match:
+            continue
+        try:
+            snapshot_date = datetime.strptime(
+                match.group(1), "%Y%m%d"
+            ).date()
+        except Exception:
+            continue
+        if snapshot_date < current_date:
+            candidates.append((snapshot_date, path))
+
+    if not candidates:
+        return None, None
+
+    candidates.sort(key=lambda x: x[0], reverse=True)
+    return candidates[0]
+
+
+def calculate_oi_delta(current_df, ticker):
+    df = current_df.copy()
+    df["previous_openInterest"] = 0.0
+    df["oi_delta"] = 0.0
+    df["oi_delta_available"] = False
+    df["oi_delta_status"] = "NO_PREVIOUS_SNAPSHOT"
+
+    previous_date, previous_path = find_previous_oi_snapshot(ticker)
+
+    if previous_path is None:
+        return df, None
+
+    try:
+        previous = pd.read_csv(
+            previous_path,
+            encoding="utf-8-sig"
+        )
+
+        previous["expiration"] = previous["expiration"].astype(str)
+        previous["option_type"] = previous["option_type"].astype(str)
+        previous["strike"] = pd.to_numeric(
+            previous["strike"], errors="coerce"
+        )
+        previous["openInterest"] = pd.to_numeric(
+            previous["openInterest"], errors="coerce"
+        ).fillna(0).clip(lower=0)
+
+        previous = previous.dropna(
+            subset=["expiration", "strike", "option_type"]
+        ).drop_duplicates(
+            subset=["expiration", "strike", "option_type"],
+            keep="last"
+        )
+
+        previous = previous.rename(
+            columns={"openInterest": "previous_openInterest"}
+        )
+
+        keys = ["expiration", "strike", "option_type"]
+
+        df = df.merge(
+            previous[keys + ["previous_openInterest"]],
+            on=keys,
+            how="left",
+            suffixes=("", "_old")
+        )
+
+        if "previous_openInterest_old" in df.columns:
+            df["previous_openInterest"] = df[
+                "previous_openInterest_old"
+            ]
+            df.drop(
+                columns=["previous_openInterest_old"],
+                inplace=True
+            )
+
+        df["previous_openInterest"] = pd.to_numeric(
+            df["previous_openInterest"],
+            errors="coerce"
+        ).fillna(0).clip(lower=0)
+
+        df["oi_delta"] = (
+            df["openInterest"]
+            - df["previous_openInterest"]
+        )
+
+        df["oi_delta_available"] = True
+        df["oi_delta_status"] = (
+            f"COMPARED_WITH_{previous_date.strftime('%Y%m%d')}"
+        )
+
+        return df, previous_date
+
+    except Exception as e:
+        print(f"⚠️ {ticker} OI 스냅샷 읽기 실패: {e}")
+        return df, None
+
+
+def save_oi_snapshot(ticker, df):
+    filename = get_oi_snapshot_path(ticker)
+    snapshot = build_oi_snapshot(df)
+    snapshot.to_csv(
+        filename,
+        index=False,
+        encoding="utf-8-sig"
+    )
+    print(f"💾 OI 스냅샷 저장: {filename}")
+    return filename
+
+
+def find_top_oi_delta(df, current_price, top_n=5):
+    empty = {
+        "call_increase": pd.DataFrame(),
+        "call_decrease": pd.DataFrame(),
+        "put_increase": pd.DataFrame(),
+        "put_decrease": pd.DataFrame()
+    }
+
+    if "oi_delta" not in df.columns:
+        return empty
+
+    active = df[
+        df["oi_delta_available"]
+        & (df["oi_delta"] != 0)
+    ].copy()
+
+    if active.empty:
+        return empty
+
+    active["distance_pct"] = (
+        abs(active["strike"] - current_price)
+        / current_price
+        * 100
+    )
+
+    active = active[
+        active["distance_pct"] <= WALL_RANGE_PCT
+    ]
+
+    calls = active[active["option_type"] == "CALL"]
+    puts = active[active["option_type"] == "PUT"]
+
+    return {
+        "call_increase": calls[
+            calls["oi_delta"] > 0
+        ].sort_values(
+            ["oi_delta", "volume"],
+            ascending=False
+        ).head(top_n),
+
+        "call_decrease": calls[
+            calls["oi_delta"] < 0
+        ].sort_values(
+            ["oi_delta", "volume"],
+            ascending=True
+        ).head(top_n),
+
+        "put_increase": puts[
+            puts["oi_delta"] > 0
+        ].sort_values(
+            ["oi_delta", "volume"],
+            ascending=False
+        ).head(top_n),
+
+        "put_decrease": puts[
+            puts["oi_delta"] < 0
+        ].sort_values(
+            ["oi_delta", "volume"],
+            ascending=True
+        ).head(top_n)
+    }
 
 
 # ============================================================
@@ -1177,7 +1411,22 @@ def calculate_flow_summary(
         "call_oi_ratio": call_oi_ratio,
         "call_premium_ratio": call_premium_ratio,
         "atm_iv": atm_iv,
-        "dte_buckets": dte_buckets
+        "dte_buckets": dte_buckets,
+        "call_oi_delta": float(
+            df[df["option_type"] == "CALL"]["oi_delta"].sum()
+        ),
+        "put_oi_delta": float(
+            df[df["option_type"] == "PUT"]["oi_delta"].sum()
+        ),
+        "total_oi_delta": float(df["oi_delta"].sum()),
+        "oi_delta_available": bool(
+            df["oi_delta_available"].any()
+        ),
+        "oi_delta_status": (
+            str(df["oi_delta_status"].iloc[0])
+            if not df.empty
+            else "NO_PREVIOUS_SNAPSHOT"
+        )
     }
 
 
@@ -2220,6 +2469,26 @@ def build_report(
     )
 
     lines.append(
+        f"CALL OI Δ: "
+        f"{format_signed_money(flow['call_oi_delta'])}"
+    )
+
+    lines.append(
+        f"PUT OI Δ: "
+        f"{format_signed_money(flow['put_oi_delta'])}"
+    )
+
+    if flow["oi_delta_available"]:
+        lines.append(
+            f"OI 비교 기준: "
+            f"{flow['oi_delta_status'].replace('COMPARED_WITH_', '')}"
+        )
+    else:
+        lines.append(
+            "OI 비교 기준: 전일 스냅샷 없음"
+        )
+
+    lines.append(
         f"CALL 거래대금 Proxy: "
         f"{format_money(flow['call_premium'])}"
     )
@@ -2523,7 +2792,88 @@ def build_report(
 
     lines.append("")
 
+    
+# ========================================================
     # ========================================================
+    # OI DELTA
+    # ========================================================
+
+    lines.append(
+        "━━━━━━━━━━━━━━━━━━━━━━━━"
+    )
+
+    lines.append(
+        "📈 8. OI DELTA"
+    )
+
+    lines.append(
+        "━━━━━━━━━━━━━━━━━━━━━━━━"
+    )
+
+    if flow["oi_delta_available"]:
+
+        oi_delta_top = find_top_oi_delta(
+            df,
+            current_price,
+            top_n=5
+        )
+
+        def append_oi_group(title, data):
+
+            lines.append("")
+            lines.append(title)
+
+            if data.empty:
+                lines.append("없음")
+                return
+
+            for _, row in data.iterrows():
+
+                delta = float(row["oi_delta"])
+                sign = "🔺" if delta > 0 else "🔻"
+
+                lines.append(
+                    f"• ${row['strike']:g} "
+                    f"| DTE {int(row['DTE'])} "
+                    f"| OI {int(row['openInterest']):,} "
+                    f"| Δ {delta:+,.0f} {sign} "
+                    f"| Vol {int(row['volume']):,}"
+                )
+
+        append_oi_group(
+            "🟢 CALL OI 증가 TOP 5",
+            oi_delta_top["call_increase"]
+        )
+
+        append_oi_group(
+            "🔻 CALL OI 감소 TOP 5",
+            oi_delta_top["call_decrease"]
+        )
+
+        append_oi_group(
+            "🟢 PUT OI 증가 TOP 5",
+            oi_delta_top["put_increase"]
+        )
+
+        append_oi_group(
+            "🔻 PUT OI 감소 TOP 5",
+            oi_delta_top["put_decrease"]
+        )
+
+    else:
+
+        lines.append(
+            "⚠️ 전일 OI 스냅샷이 없어 "
+            "OI 증가/감소를 계산하지 못했습니다."
+        )
+
+        lines.append(
+            "오늘 데이터를 저장했으므로 "
+            "다음 실행부터 비교 가능합니다."
+        )
+
+    lines.append("")
+
     # DTE
     # ========================================================
 
@@ -2534,7 +2884,7 @@ def build_report(
     )
 
     lines.append(
-        "📅 8. DTE DISTRIBUTION"
+        "📅 9. DTE DISTRIBUTION"
     )
 
     lines.append(
@@ -2789,6 +3139,25 @@ def analyze_ticker(ticker):
             current_price
         )
 
+        # ====================================================
+        # OI DELTA
+        # ====================================================
+
+        df, previous_oi_date = calculate_oi_delta(
+            df,
+            ticker
+        )
+
+        if previous_oi_date is not None:
+            print(
+                f"📈 OI 비교 기준일: "
+                f"{previous_oi_date.strftime('%Y-%m-%d')}"
+            )
+        else:
+            print(
+                "📈 OI 비교 기준일: 전일 스냅샷 없음"
+            )
+
         greeks = (
             calculate_aggregate_greeks(
                 df
@@ -2844,6 +3213,15 @@ def analyze_ticker(ticker):
         )
 
         # ====================================================
+        # OI SNAPSHOT
+        # ====================================================
+
+        oi_snapshot_file = save_oi_snapshot(
+            ticker,
+            df
+        )
+
+        # ====================================================
         # TELEGRAM
         # ====================================================
 
@@ -2862,6 +3240,8 @@ def analyze_ticker(ticker):
             "quality": quality,
             "report": report,
             "csv_file": csv_file,
+            "oi_snapshot_file": oi_snapshot_file,
+            "previous_oi_date": previous_oi_date,
             "telegram_ok": telegram_ok
         }
 
