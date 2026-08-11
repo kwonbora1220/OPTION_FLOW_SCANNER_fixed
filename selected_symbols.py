@@ -15,6 +15,8 @@ SELECTED_SYMBOLS = [
     "DRAM",
     "RKLB",
     "SKHY",
+    "IREN",
+    "REMX",
     "CRCL",
     "SPCX",
     "PLTR",
