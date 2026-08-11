@@ -132,61 +132,146 @@ def format_pct(x):
 
 
 # ============================================================
-# CURRENT PRICE
+# MARKET PRICE CONTEXT
 # ============================================================
 
-def get_current_price(ticker):
+def get_market_price_context(ticker):
+    """
+    정규장 종가와 시간외 가격을 분리한다.
+
+    - regular_close: 옵션 계산 기준 가격
+    - after_hours_price: 시간외 참고 가격
+    - after_hours_change_pct: 정규장 종가 대비 시간외 변동률
+
+    옵션 계산은 반드시 regular_close를 사용한다.
+    """
 
     for attempt in range(1, 4):
-
         try:
-
             print(
-                f"💰 {ticker} 현재가 조회 ({attempt}/3)"
+                f"💰 {ticker} 가격 조회 ({attempt}/3)"
             )
 
             t = yf.Ticker(ticker)
 
+            # ----------------------------------------------------
+            # 1. 정규장 종가
+            # ----------------------------------------------------
             hist = t.history(
                 period="5d",
                 interval="1d",
                 auto_adjust=False
             )
 
-            if not hist.empty:
+            regular_close = None
 
-                close = (
-                    hist["Close"]
-                    .dropna()
+            if not hist.empty:
+                close = hist["Close"].dropna()
+                if not close.empty:
+                    regular_close = float(close.iloc[-1])
+
+            if regular_close is None:
+                raise ValueError("정규장 종가를 가져오지 못했습니다.")
+
+            # ----------------------------------------------------
+            # 2. Yahoo 시장 상태
+            # ----------------------------------------------------
+            market_state = None
+            try:
+                info = t.get_info()
+                market_state = info.get("marketState")
+            except Exception:
+                market_state = None
+
+            # ----------------------------------------------------
+            # 3. 1분봉 PRE/POST 포함 데이터에서 최신 가격 확인
+            # ----------------------------------------------------
+            after_hours_price = None
+
+            try:
+                intraday = t.history(
+                    period="1d",
+                    interval="1m",
+                    prepost=True,
+                    auto_adjust=False
                 )
 
-                if not close.empty:
+                if not intraday.empty:
+                    intraday_close = intraday["Close"].dropna()
+                    if not intraday_close.empty:
+                        latest_price = float(intraday_close.iloc[-1])
 
-                    price = float(
-                        close.iloc[-1]
-                    )
+                        # Yahoo가 POST/POSTPOST라고 알려주는 경우에만
+                        # 시간외 가격으로 인정한다.
+                        if market_state in {"POST", "POSTPOST"}:
+                            if abs(latest_price - regular_close) > 0.000001:
+                                after_hours_price = latest_price
 
-                    print(
-                        f"💰 {ticker} 현재가: "
-                        f"${price:.2f}"
-                    )
+            except Exception as e:
+                print(
+                    f"⚠️ {ticker} 시간외 가격 조회 실패: {e}"
+                )
 
-                    return price
+            after_hours_change_pct = None
 
-        except Exception as e:
+            if (
+                after_hours_price is not None
+                and regular_close != 0
+            ):
+                after_hours_change_pct = (
+                    (after_hours_price / regular_close) - 1.0
+                ) * 100.0
 
             print(
-                f"⚠️ 현재가 조회 실패: {e}"
+                f"💰 {ticker} 정규장 종가: "
+                f"${regular_close:.2f}"
+            )
+
+            if after_hours_price is not None:
+                print(
+                    f"🌙 {ticker} 시간외 현재가: "
+                    f"${after_hours_price:.2f}"
+                    + (
+                        f" ({after_hours_change_pct:+.2f}%)"
+                        if after_hours_change_pct is not None
+                        else ""
+                    )
+                )
+            else:
+                print(
+                    f"🌙 {ticker} 시간외 현재가: N/A"
+                )
+
+            return {
+                "regular_close": regular_close,
+                "after_hours_price": after_hours_price,
+                "after_hours_change_pct": after_hours_change_pct,
+                "market_state": market_state,
+                # ★ 기존 옵션 계산은 정규장 종가 기준 유지
+                "option_analysis_price": regular_close,
+            }
+
+        except Exception as e:
+            print(
+                f"⚠️ 가격 조회 실패: {e}"
             )
 
         if attempt < 3:
             time.sleep(2)
 
     print(
-        f"❌ {ticker} 현재가 조회 실패"
+        f"❌ {ticker} 가격 조회 실패"
     )
 
     return None
+
+
+def get_current_price(ticker):
+    """기존 호환용: 옵션 계산에는 정규장 종가만 반환한다."""
+    context = get_market_price_context(ticker)
+    if context is None:
+        return None
+    return context["option_analysis_price"]
 
 
 # ============================================================
@@ -1999,7 +2084,8 @@ def build_report(
     greeks,
     flow,
     walls,
-    quality
+    quality,
+    price_context=None
 ):
 
     my_summary = build_my_summary(
@@ -2041,9 +2127,31 @@ def build_report(
     lines.append("")
 
     lines.append(
-        f"💰 현재가: "
+        f"💰 정규장 종가: "
         f"${current_price:.2f}"
     )
+
+    if price_context is not None:
+        after_hours_price = price_context.get("after_hours_price")
+        after_hours_change_pct = price_context.get("after_hours_change_pct")
+
+        if after_hours_price is not None:
+            lines.append(
+                f"🌙 시간외 현재가: ${after_hours_price:.2f}"
+                + (
+                    f" ({after_hours_change_pct:+.2f}%)"
+                    if after_hours_change_pct is not None
+                    else ""
+                )
+            )
+        else:
+            lines.append(
+                "🌙 시간외 현재가: N/A"
+            )
+
+        lines.append(
+            f"📊 옵션 계산 기준가: ${current_price:.2f}"
+        )
 
     lines.append(
         f"📊 옵션 행수: "
@@ -2610,13 +2718,15 @@ def analyze_ticker(ticker):
 
     try:
 
-        current_price = get_current_price(
+        price_context = get_market_price_context(
             ticker
         )
 
-        if current_price is None:
+        if price_context is None:
 
             return None
+
+        current_price = price_context["option_analysis_price"]
 
         print("")
 
@@ -2685,7 +2795,8 @@ def analyze_ticker(ticker):
             greeks,
             flow,
             walls,
-            quality
+            quality,
+            price_context
         )
 
         print("")
@@ -2712,6 +2823,7 @@ def analyze_ticker(ticker):
         return {
             "ticker": ticker,
             "current_price": current_price,
+            "price_context": price_context,
             "df": df,
             "greeks": greeks,
             "flow": flow,
