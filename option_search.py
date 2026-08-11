@@ -2640,60 +2640,126 @@ def save_option_csv(
 def send_telegram(text):
 
     if not BOT_TOKEN:
-
-        print(
-            "⚠️ TELEGRAM_BOT_TOKEN이 없습니다."
-        )
-
+        print("⚠️ TELEGRAM_BOT_TOKEN이 없습니다.")
         return False
 
     if not CHAT_ID:
-
-        print(
-            "⚠️ TELEGRAM_CHAT_ID가 없습니다."
-        )
-
+        print("⚠️ TELEGRAM_CHAT_ID가 없습니다.")
         return False
 
-    url = (
-        "https://api.telegram.org/"
-        f"bot{BOT_TOKEN}/sendMessage"
-    )
+    if not text:
+        print("⚠️ Telegram 메시지가 비어 있습니다.")
+        return False
 
-    data = {
-        "chat_id": CHAT_ID,
-        "text": text
-    }
+    MAX_LENGTH = 3800
 
-    try:
+    # ------------------------------------------------------------
+    # MESSAGE SPLIT
+    # ------------------------------------------------------------
 
-        response = requests.post(
-            url,
-            data=data,
-            timeout=30
-        )
+    chunks = []
 
-        print(
-            f"📨 Telegram: "
-            f"{response.status_code}"
-        )
+    if len(text) <= MAX_LENGTH:
 
-        if not response.ok:
+        chunks = [text]
 
-            print(
-                response.text
+    else:
+
+        current = ""
+
+        for line in text.splitlines(True):
+
+            if len(current) + len(line) <= MAX_LENGTH:
+
+                current += line
+
+            else:
+
+                if current:
+                    chunks.append(current)
+
+                # 한 줄 자체가 너무 긴 경우
+                while len(line) > MAX_LENGTH:
+
+                    chunks.append(
+                        line[:MAX_LENGTH]
+                    )
+
+                    line = line[MAX_LENGTH:]
+
+                current = line
+
+        if current:
+            chunks.append(current)
+
+    # ------------------------------------------------------------
+    # SEND
+    # ------------------------------------------------------------
+
+    total = len(chunks)
+
+    success = True
+
+    for index, chunk in enumerate(
+        chunks,
+        start=1
+    ):
+
+        if total > 1:
+
+            chunk = (
+                f"📨 PART {index}/{total}\n\n"
+                + chunk
             )
 
-        return response.ok
+        data = {
+            "chat_id": CHAT_ID,
+            "text": chunk,
+            "parse_mode": "HTML"
+        }
 
-    except Exception as e:
-
-        print(
-            f"❌ Telegram 오류: {e}"
+        url = (
+            "https://api.telegram.org/"
+            f"bot{BOT_TOKEN}/sendMessage"
         )
 
-        return False
+        try:
 
+            response = requests.post(
+                url,
+                data=data,
+                timeout=30
+            )
+
+            print(
+                f"📨 Telegram "
+                f"{index}/{total}: "
+                f"{response.status_code}"
+            )
+
+            if not response.ok:
+
+                print(
+                    "❌ Telegram 오류:"
+                )
+
+                print(
+                    response.text
+                )
+
+                success = False
+
+            time.sleep(0.3)
+
+        except Exception as e:
+
+            print(
+                f"❌ Telegram 오류: {e}"
+            )
+
+            success = False
+
+    return success
 
 # ============================================================
 # ANALYZE ONE TICKER
