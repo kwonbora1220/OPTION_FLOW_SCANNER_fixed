@@ -6,7 +6,7 @@ SELECTED_SYMBOLS = [
     "QQQ",
     "SPY",
     "SOXX",
-    "PLTR",
+    "DRAM",
     "SMCI",
     "MSFT",
     "IBM",
@@ -14,7 +14,8 @@ SELECTED_SYMBOLS = [
     "VST",
     "DRAM",
     "RKLB",
-    "ASTS"
+    "SKHY",
+    "CRCL",
     "SPCX",
     "PLTR",
     "FLY",
