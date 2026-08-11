@@ -9,6 +9,18 @@ from option_search import (
     send_telegram
 )
 
+from oi_history import (
+    calculate_oi_change,
+    save_oi_snapshot,
+    format_oi_change
+)
+
+from signal_history import (
+    record_signal,
+    update_signal_results,
+    get_signal_stats,
+    format_signal_stats
+)
 
 # ============================================================
 # CONFIG
