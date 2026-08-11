@@ -2636,6 +2636,7 @@ def save_option_csv(
 # ============================================================
 # TELEGRAM
 # ============================================================
+
 def send_telegram(text):
 
     if not BOT_TOKEN:
@@ -2655,30 +2656,20 @@ def send_telegram(text):
     chunks = []
 
     if len(text) <= MAX_LENGTH:
-
         chunks = [text]
-
     else:
-
         current = ""
 
         for line in text.splitlines(True):
 
             if len(current) + len(line) <= MAX_LENGTH:
-
                 current += line
-
             else:
-
                 if current:
                     chunks.append(current)
 
                 while len(line) > MAX_LENGTH:
-
-                    chunks.append(
-                        line[:MAX_LENGTH]
-                    )
-
+                    chunks.append(line[:MAX_LENGTH])
                     line = line[MAX_LENGTH:]
 
                 current = line
@@ -2687,7 +2678,6 @@ def send_telegram(text):
             chunks.append(current)
 
     total = len(chunks)
-
     success = True
 
     url = (
@@ -2695,13 +2685,9 @@ def send_telegram(text):
         f"bot{BOT_TOKEN}/sendMessage"
     )
 
-    for index, chunk in enumerate(
-        chunks,
-        start=1
-    ):
+    for index, chunk in enumerate(chunks, start=1):
 
         if total > 1:
-
             chunk = (
                 f"📨 PART {index}/{total}\n\n"
                 + chunk
@@ -2714,7 +2700,6 @@ def send_telegram(text):
         }
 
         try:
-
             response = requests.post(
                 url,
                 data=data,
@@ -2728,29 +2713,19 @@ def send_telegram(text):
             )
 
             if not response.ok:
-
-                print(
-                    "❌ Telegram 오류:"
-                )
-
-                print(
-                    response.text[:1000]
-                )
-
+                print("❌ Telegram 오류:")
+                print(response.text[:1000])
                 success = False
 
             time.sleep(0.3)
 
         except Exception as e:
-
-            print(
-                f"❌ Telegram 오류: {e}"
-            )
-
+            print(f"❌ Telegram 오류: {e}")
             success = False
 
     return success
-    
+
+
 # ============================================================
 # ANALYZE ONE TICKER
 # ============================================================
