@@ -8,7 +8,7 @@ on:
   # 한국시간 오전 6:00
   # UTC 전날 21:00
   schedule:
-    - cron: "0 21 * * *"
+    - cron: "0 20 * * *"
 
 
 jobs:
