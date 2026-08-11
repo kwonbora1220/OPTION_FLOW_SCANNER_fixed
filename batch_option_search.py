@@ -1292,6 +1292,30 @@ def main():
 
         print("=" * 70)
 
+        if analysis:
+
+            try:
+
+                oi_change = calculate_oi_change(
+                ticker,
+                analysis["df"]
+                )
+
+                analysis["oi_change"] = oi_change
+
+                save_oi_snapshot(
+                    ticker,
+                    analysis["df"]
+                )
+
+            except Exception as e:
+
+                print(
+                    f"⚠️ {ticker} OI 분석 실패: {e}"
+                )
+
+                analysis["oi_change"] = None
+        
         try:
 
             analysis = analyze_ticker(
