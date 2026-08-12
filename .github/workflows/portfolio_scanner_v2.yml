@@ -1,22 +1,13 @@
 name: PORTFOLIO OPTION SCANNER V2
 
 on:
-
-  # ============================================================
-  # MANUAL RUN
-  # ============================================================
-
   workflow_dispatch:
-
     inputs:
-
       mode:
         description: "실행 모드"
-        required: false
-        default: "auto"
-
+        required: true
+        default: auto
         type: choice
-
         options:
           - auto
           - am
@@ -24,84 +15,33 @@ on:
           - pm
           - full
 
-
-  # ============================================================
-  # AUTOMATIC SCHEDULE
-  #
-  # 미국 동부시간 기준
-  #
-  # 08:00 ET
-  # 08:30 ET
-  # 16:00 ET
-  # 16:05 ET
-  #
-  # EDT / EST 차이를 고려하여 각각 UTC 두 개 등록
-  # ============================================================
-
+  # GitHub cron은 UTC 기준
+  # EDT / EST 모두 등록하고 실제 단계는 schedule 값으로 판별
   schedule:
-
-    # ----------------------------------------------------------
-    # 08:00 ET - EDT
-    # ----------------------------------------------------------
-
     - cron: "0 12 * * 1-5"
-
-    # ----------------------------------------------------------
-    # 08:00 ET - EST
-    # ----------------------------------------------------------
-
     - cron: "0 13 * * 1-5"
 
-
-    # ----------------------------------------------------------
-    # 08:30 ET - EDT
-    # ----------------------------------------------------------
-
     - cron: "30 12 * * 1-5"
-
-    # ----------------------------------------------------------
-    # 08:30 ET - EST
-    # ----------------------------------------------------------
-
     - cron: "30 13 * * 1-5"
 
-
-    # ----------------------------------------------------------
-    # 16:00 ET - EDT
-    # ----------------------------------------------------------
-
     - cron: "0 20 * * 1-5"
-
-    # ----------------------------------------------------------
-    # 16:00 ET - EST
-    # ----------------------------------------------------------
-
     - cron: "0 21 * * 1-5"
 
-
-    # ----------------------------------------------------------
-    # 16:05 ET - EDT
-    # ----------------------------------------------------------
-
     - cron: "5 20 * * 1-5"
-
-    # ----------------------------------------------------------
-    # 16:05 ET - EST
-    # ----------------------------------------------------------
-
     - cron: "5 21 * * 1-5"
 
+permissions:
+  contents: write
 
-# ==============================================================
-# JOB
-# ==============================================================
+concurrency:
+  group: portfolio-option-scanner-v2-main
+  cancel-in-progress: false
 
 jobs:
 
   portfolio-scanner-v2:
 
     runs-on: ubuntu-latest
-
 
     steps:
 
@@ -114,8 +54,8 @@ jobs:
         uses: actions/checkout@v4
 
         with:
-
-          fetch-depth: 1
+          fetch-depth: 0
+          ref: main
 
 
       # ========================================================
@@ -127,12 +67,11 @@ jobs:
         uses: actions/setup-python@v5
 
         with:
-
-          python-version: "3.12"
+          python-version: "3.11"
 
 
       # ========================================================
-      # 3. INSTALL DEPENDENCIES
+      # 3. DEPENDENCIES
       # ========================================================
 
       - name: Install dependencies
@@ -149,7 +88,7 @@ jobs:
 
 
       # ========================================================
-      # 4. PYTHON PATH
+      # 4. ENVIRONMENT
       # ========================================================
 
       - name: Configure Python path
@@ -158,31 +97,96 @@ jobs:
 
           echo "PYTHONPATH=$GITHUB_WORKSPACE" >> "$GITHUB_ENV"
 
+          echo "PYTHONIOENCODING=utf-8" >> "$GITHUB_ENV"
+
 
       # ========================================================
-      # 5. CHECK US EASTERN TIME
+      # 5. DETERMINE RUN MODE
+      #
+      # schedule 값을 기준으로 AM / OPTION / PM을 구분
+      #
+      # GitHub Actions가 몇 분 늦게 시작되어도
+      # 단계가 뒤바뀌지 않음
       # ========================================================
 
-      - name: Check US Eastern Time
+      - name: Determine execution mode
 
-        id: time
+        id: mode
+
+        env:
+
+          MANUAL_MODE: ${{ github.event.inputs.mode }}
+
+          SCHEDULE_CRON: ${{ github.event.schedule }}
 
         run: |
 
           python - <<'PY'
+
+          import os
 
           from datetime import datetime
 
           from zoneinfo import ZoneInfo
 
 
-          et = ZoneInfo(
-              "America/New_York"
+          manual = os.environ.get(
+              "MANUAL_MODE",
+              ""
           )
 
 
+          schedule = os.environ.get(
+              "SCHEDULE_CRON",
+              ""
+          )
+
+
+          # ====================================================
+          # MANUAL
+          # ====================================================
+
+          if manual and manual != "auto":
+
+              mode = manual
+
+
+          else:
+
+              # =================================================
+              # AUTOMATIC SCHEDULE
+              # =================================================
+
+              schedule_map = {
+
+                  # 08:00 ET
+                  "0 12 * * 1-5": "am",
+                  "0 13 * * 1-5": "am",
+
+                  # 08:30 ET
+                  "30 12 * * 1-5": "option",
+                  "30 13 * * 1-5": "option",
+
+                  # 16:00 ET
+                  "0 20 * * 1-5": "option",
+                  "0 21 * * 1-5": "option",
+
+                  # 16:05 ET
+                  "5 20 * * 1-5": "pm",
+                  "5 21 * * 1-5": "pm",
+              }
+
+
+              mode = schedule_map.get(
+                  schedule,
+                  "none"
+              )
+
+
           now = datetime.now(
-              et
+              ZoneInfo(
+                  "America/New_York"
+              )
           )
 
 
@@ -204,108 +208,35 @@ jobs:
               "=========================================="
           )
 
-
-          # ----------------------------------------------------
-          # Determine execution mode
-          # ----------------------------------------------------
-
-          hour = now.hour
-
-          minute = now.minute
-
-
-          # ----------------------------------------------------
-          # Manual execution
-          # ----------------------------------------------------
-
-          manual_mode = (
-              "${{ github.event.inputs.mode }}"
+          print(
+              f"Schedule: {schedule or 'manual'}"
           )
 
-
-          if manual_mode and manual_mode != "auto":
-
-              mode = manual_mode
-
-
-          else:
-
-              # ------------------------------------------------
-              # Automatic schedule
-              # ------------------------------------------------
-
-              if (
-                  hour == 8
-                  and minute < 30
-              ):
-
-                  mode = "am"
-
-
-              elif (
-                  hour == 8
-                  and minute >= 30
-              ):
-
-                  mode = "option"
-
-
-              elif hour == 16:
-
-                  if minute <= 2:
-
-                      mode = "option"
-
-                  else:
-
-                      mode = "pm"
-
-
-              else:
-
-                  mode = "auto"
-
-
           print(
-              f"RUN_MODE={mode}"
+              f"RUN_MODE: {mode}"
           )
 
 
           with open(
-              "${{ github.output }}",
-              "a"
+              os.environ["GITHUB_OUTPUT"],
+              "a",
+              encoding="utf-8"
           ) as f:
 
               f.write(
                   f"mode={mode}\n"
               )
 
+              f.write(
+                  "market_date="
+                  f"{now.strftime('%Y%m%d')}\n"
+              )
+
           PY
 
 
       # ========================================================
-      # 6. DISPLAY MODE
-      # ========================================================
-
-      - name: Display execution mode
-
-        run: |
-
-          echo "=========================================="
-
-          echo "🚀 PORTFOLIO OPTION SCANNER V2"
-
-          echo "=========================================="
-
-          echo ""
-
-          echo "Execution mode: ${{ steps.time.outputs.mode }}"
-
-          echo ""
-
-
-      # ========================================================
-      # 7. COMPILE CHECK
+      # 6. COMPILE CHECK
       # ========================================================
 
       - name: Compile Python files
@@ -314,124 +245,50 @@ jobs:
 
           set -e
 
-
-          echo "=========================================="
-
-          echo "🐍 PYTHON COMPILE CHECK"
-
-          echo "=========================================="
-
-
-          # ----------------------------------------------------
-          # AM
-          # ----------------------------------------------------
-
-          if [
-            -f "01_MARKET_CONTEXT/am_market_context.py"
-          ]; then
-
-            python -m py_compile \
-              01_MARKET_CONTEXT/am_market_context.py
-
-          fi
-
-
-          # ----------------------------------------------------
-          # OPTION SEARCH
-          # ----------------------------------------------------
-
-          if [
-            -f "option_search.py"
-          ]; then
-
-            python -m py_compile \
-              option_search.py
-
-          fi
-
-
-          if [
-            -f "batch_option_search.py"
-          ]; then
-
-            python -m py_compile \
-              batch_option_search.py
-
-          fi
-
-
-          # ----------------------------------------------------
-          # V2
-          # ----------------------------------------------------
-
-          if [
-            -f "portfolio_option_scanner_v2.py"
-          ]; then
-
-            python -m py_compile \
-              portfolio_option_scanner_v2.py
-
-          fi
-
-
-          # ----------------------------------------------------
-          # PM
-          # ----------------------------------------------------
-
-          if [
-            -f "01_MARKET_CONTEXT/pm_volatility_update.py"
-          ]; then
-
-            python -m py_compile \
-              01_MARKET_CONTEXT/pm_volatility_update.py
-
-          fi
-
-
-          # ----------------------------------------------------
-          # PERFORMANCE
-          # ----------------------------------------------------
-
-          if [
-            -f "signal_performance.py"
-          ]; then
-
-            python -m py_compile \
-              signal_performance.py
-
-          fi
-
-
-          echo ""
+          python -m py_compile \
+            01_MARKET_CONTEXT/am_market_context.py \
+            01_MARKET_CONTEXT/pm_volatility_update.py \
+            option_search.py \
+            batch_option_search.py \
+            oi_history.py \
+            signal_history.py \
+            signal_performance.py \
+            portfolio_option_scanner_v2.py
 
           echo "✅ Python compile check passed"
 
 
       # ========================================================
-      # 8. AM MARKET CONTEXT
+      # 7. AM MARKET CONTEXT
       #
-      # 08:00 ET
+      # 🇺🇸 08:00 ET
       # ========================================================
 
       - name: 🌅 AM Market Context
 
         if: |
-          steps.time.outputs.mode == 'am' ||
-          steps.time.outputs.mode == 'full' ||
-          github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'am'
+          steps.mode.outputs.mode == 'am' ||
+          steps.mode.outputs.mode == 'full'
+
+        env:
+
+          TELEGRAM_BOT_TOKEN:
+            ${{ secrets.TELEGRAM_BOT_TOKEN }}
+
+          TELEGRAM_CHAT_ID:
+            ${{ secrets.TELEGRAM_CHAT_ID }}
 
         run: |
 
           set -e
 
-
-          echo "=========================================="
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━"
 
           echo "🌅 AM MARKET CONTEXT"
 
           echo "🇺🇸 08:00 ET"
 
-          echo "=========================================="
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━"
 
 
           python \
@@ -440,11 +297,7 @@ jobs:
 
           echo ""
 
-          echo "=========================================="
-
           echo "📂 AM RESULT"
-
-          echo "=========================================="
 
 
           find \
@@ -456,15 +309,73 @@ jobs:
 
 
       # ========================================================
-      # 9. VERIFY AM CONTEXT
+      # 8. SAVE AM CONTEXT
+      #
+      # 중요:
+      #
+      # 08:00 AM 실행과
+      # 08:30 OPTION 실행은
+      # 서로 다른 GitHub Actions 실행이다.
+      #
+      # 따라서 AM JSON을 GitHub에 저장해야
+      # 다음 실행에서 읽을 수 있다.
       # ========================================================
 
-      - name: Verify AM Context
+      - name: 💾 Persist AM Context
 
         if: |
-          steps.time.outputs.mode == 'option' ||
-          steps.time.outputs.mode == 'full' ||
-          github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'option'
+          steps.mode.outputs.mode == 'am' ||
+          steps.mode.outputs.mode == 'full'
+
+        run: |
+
+          set -e
+
+
+          git config user.name \
+            "github-actions[bot]"
+
+
+          git config user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
+
+
+          git add -f \
+            03_RESULTS/daily/AM_MARKET_CONTEXT_*.json \
+            2>/dev/null || true
+
+
+          git add -f \
+            03_RESULTS/daily/AM_MARKET_CONTEXT_*.txt \
+            2>/dev/null || true
+
+
+          if git diff --cached --quiet; then
+
+            echo "ℹ️ AM 결과 변경사항 없음"
+
+          else
+
+            git commit \
+              -m "data: save AM market context"
+
+            git push origin HEAD:main
+
+          fi
+
+
+      # ========================================================
+      # 9. VERIFY AM CONTEXT
+      #
+      # OPTION SEARCH 전에 반드시
+      # 오늘 AM JSON 존재 확인
+      # ========================================================
+
+      - name: 🔎 Verify AM Context
+
+        if: |
+          steps.mode.outputs.mode == 'option' ||
+          steps.mode.outputs.mode == 'full'
 
         run: |
 
@@ -473,74 +384,83 @@ jobs:
 
           python - <<'PY'
 
-          from datetime import datetime
+          import json
 
           from pathlib import Path
+
+          from datetime import datetime
 
           from zoneinfo import ZoneInfo
 
 
-          et = ZoneInfo(
-              "America/New_York"
-          )
-
-
           date = datetime.now(
-              et
+              ZoneInfo(
+                  "America/New_York"
+              )
           ).strftime(
               "%Y%m%d"
           )
 
 
-          path = Path(
-              "03_RESULTS/daily"
-          ) / (
+          path = (
+              Path(
+                  "03_RESULTS/daily"
+              )
+              /
               f"AM_MARKET_CONTEXT_{date}.json"
           )
 
 
           print(
-              "=========================================="
-          )
-
-          print(
-              "🌅 CHECK AM MARKET CONTEXT"
-          )
-
-          print(
-              "=========================================="
-          )
-
-          print(
-              f"Expected: {path}"
+              f"Expected AM Context: {path}"
           )
 
 
           if not path.exists():
 
-              print("")
+              raise SystemExit(
 
-              print(
-                  "❌ AM Context 파일이 없습니다."
+                  "❌ 오늘 AM Context JSON이 없습니다.\n"
+
+                  "AM 실행/저장이 먼저 성공해야 합니다."
+
               )
 
-              print("")
 
-              print(
-                  "AM 분석을 먼저 실행해야 합니다."
-              )
+          with path.open(
+              "r",
+              encoding="utf-8"
+          ) as f:
 
-              raise SystemExit(1)
+              payload = json.load(f)
 
 
-          print("")
+          context = payload.get(
+              "market_context",
+              {}
+          )
+
 
           print(
               "✅ AM Context found"
           )
 
+
           print(
-              f"File: {path}"
+              f"Direction: "
+              f"{context.get('direction')}"
+          )
+
+
+          print(
+              f"Score: "
+              f"{context.get('score')}"
+          )
+
+
+          print(
+              f"Regime: "
+              f"{context.get('regime')}"
           )
 
           PY
@@ -549,19 +469,26 @@ jobs:
       # ========================================================
       # 10. OPTION SEARCH
       #
-      # 08:30 ET / 16:00 ET
+      # 🇺🇸 08:30 ET
       #
-      # AM Context → OPTION SEARCH
-      # AM Context → FINAL SCORE
+      # 또는
+      #
+      # 🇺🇸 16:00 ET
+      #
+      # AM Context
+      #      ↓
+      # OPTION SEARCH
+      #      ↓
       # OI DELTA
+      #      ↓
+      # FINAL TRADING LIST
       # ========================================================
 
       - name: 🔥 Portfolio Option Scanner V2
 
         if: |
-          steps.time.outputs.mode == 'option' ||
-          steps.time.outputs.mode == 'full' ||
-          github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'option'
+          steps.mode.outputs.mode == 'option' ||
+          steps.mode.outputs.mode == 'full'
 
         env:
 
@@ -571,26 +498,17 @@ jobs:
           TELEGRAM_CHAT_ID:
             ${{ secrets.TELEGRAM_CHAT_ID }}
 
-          PYTHONIOENCODING:
-            utf-8
-
-          PYTHONPATH:
-            ${{ github.workspace }}
-
-
         run: |
 
           set -e
 
 
-          echo "=========================================="
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━"
 
           echo "🔥 PORTFOLIO OPTION SCANNER V2"
 
-          echo "=========================================="
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━"
 
-
-          echo ""
 
           echo "🌅 AM Context → OPTION SEARCH"
 
@@ -602,46 +520,23 @@ jobs:
           echo ""
 
 
-          if [
-            -f "portfolio_option_scanner_v2.py"
-          ]; then
-
-            python \
-              portfolio_option_scanner_v2.py
-
-          else
-
-            echo ""
-            echo "❌ portfolio_option_scanner_v2.py"
-            echo "파일이 없습니다."
-            echo ""
-
-            exit 1
-
-          fi
+          python \
+            portfolio_option_scanner_v2.py
 
 
       # ========================================================
-      # 11. VERIFY FINAL RANKING
+      # 11. FINAL TRADING LIST 확인
       # ========================================================
 
-      - name: Verify Final Trading List
+      - name: 🎯 Verify Final Trading List
 
         if: |
-          steps.time.outputs.mode == 'option' ||
-          steps.time.outputs.mode == 'full' ||
-          github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'option'
+          steps.mode.outputs.mode == 'option' ||
+          steps.mode.outputs.mode == 'full'
 
         run: |
 
           set -e
-
-
-          echo "=========================================="
-
-          echo "🎯 FINAL TRADING LIST"
-
-          echo "=========================================="
 
 
           FILE="03_RESULTS/daily/OPTION_FINAL_RANKING.csv"
@@ -651,36 +546,78 @@ jobs:
             ! -f "$FILE"
           ]; then
 
-            echo ""
-            echo "❌ FINAL RANKING 없음"
-            echo ""
+            echo \
+              "❌ FINAL RANKING 없음: $FILE"
 
             exit 1
 
           fi
 
 
+          echo \
+            "✅ FINAL RANKING FOUND"
+
+
           echo ""
 
-          echo "✅ FINAL RANKING FOUND"
-
-          echo ""
 
           head -30 "$FILE"
 
 
       # ========================================================
-      # 12. PM VOLATILITY UPDATE
+      # 12. OPTION / OI / SIGNAL 결과 저장
+      # ========================================================
+
+      - name: 💾 Persist Option Results
+
+        if: |
+          steps.mode.outputs.mode == 'option' ||
+          steps.mode.outputs.mode == 'full'
+
+        run: |
+
+          set -e
+
+
+          git config user.name \
+            "github-actions[bot]"
+
+
+          git config user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
+
+
+          git add -f \
+            03_RESULTS \
+            2>/dev/null || true
+
+
+          if git diff --cached --quiet; then
+
+            echo \
+              "ℹ️ 옵션 결과 변경사항 없음"
+
+          else
+
+            git commit \
+              -m "data: save option scanner results"
+
+            git push origin HEAD:main
+
+          fi
+
+
+      # ========================================================
+      # 13. PM VOLATILITY UPDATE
       #
-      # 16:05 ET
+      # 🇺🇸 16:05 ET
       # ========================================================
 
       - name: 🌙 PM Volatility Update
 
         if: |
-          steps.time.outputs.mode == 'pm' ||
-          steps.time.outputs.mode == 'full' ||
-          github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'pm'
+          steps.mode.outputs.mode == 'pm' ||
+          steps.mode.outputs.mode == 'full'
 
         env:
 
@@ -690,60 +627,41 @@ jobs:
           TELEGRAM_CHAT_ID:
             ${{ secrets.TELEGRAM_CHAT_ID }}
 
-          PYTHONIOENCODING:
-            utf-8
-
-          PYTHONPATH:
-            ${{ github.workspace }}
-
-
         run: |
 
           set -e
 
 
-          echo "=========================================="
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━"
 
           echo "🌙 PM VOLATILITY UPDATE"
 
           echo "🇺🇸 16:05 ET"
 
-          echo "=========================================="
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━"
 
 
-          if [
-            -f "01_MARKET_CONTEXT/pm_volatility_update.py"
-          ]; then
-
-            python \
-              01_MARKET_CONTEXT/pm_volatility_update.py
-
-          else
-
-            echo ""
-
-            echo "❌ pm_volatility_update.py"
-            echo "파일이 없습니다."
-
-            echo ""
-
-            exit 1
-
-          fi
+          python \
+            01_MARKET_CONTEXT/pm_volatility_update.py
 
 
       # ========================================================
-      # 13. SIGNAL PERFORMANCE
+      # 14. SIGNAL PERFORMANCE
       # ========================================================
 
       - name: 🧠 Signal Performance
 
         if: |
-          steps.time.outputs.mode == 'pm' ||
-          steps.time.outputs.mode == 'full' ||
-          github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'pm'
+          steps.mode.outputs.mode == 'pm' ||
+          steps.mode.outputs.mode == 'full'
 
         env:
+
+          TELEGRAM_BOT_TOKEN:
+            ${{ secrets.TELEGRAM_BOT_TOKEN }}
+
+          TELEGRAM_CHAT_ID:
+            ${{ secrets.TELEGRAM_CHAT_ID }}
 
           PYTHONPATH:
             ${{ github.workspace }}
@@ -751,13 +669,6 @@ jobs:
         run: |
 
           set -e
-
-
-          echo "=========================================="
-
-          echo "🧠 SIGNAL PERFORMANCE"
-
-          echo "=========================================="
 
 
           if [
@@ -781,40 +692,84 @@ jobs:
 
           else
 
-            echo ""
-            echo "⚠️ signal_performance.py 없음"
-            echo ""
+            echo \
+              "⚠️ signal_performance.py 없음"
 
           fi
 
 
       # ========================================================
-      # 14. SHOW RESULT FILES
+      # 15. PM / PERFORMANCE 저장
       # ========================================================
 
-      - name: Show result files
+      - name: 💾 Persist PM Results
+
+        if: |
+          steps.mode.outputs.mode == 'pm' ||
+          steps.mode.outputs.mode == 'full'
+
+        run: |
+
+          set -e
+
+
+          git config user.name \
+            "github-actions[bot]"
+
+
+          git config user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
+
+
+          git add -f \
+            03_RESULTS \
+            2>/dev/null || true
+
+
+          if git diff --cached --quiet; then
+
+            echo \
+              "ℹ️ PM 결과 변경사항 없음"
+
+          else
+
+            git commit \
+              -m \
+              "data: save PM volatility and signal results"
+
+            git push origin HEAD:main
+
+          fi
+
+
+      # ========================================================
+      # 16. RESULT FILES
+      # ========================================================
+
+      - name: 📂 Show result files
 
         if: always()
 
         run: |
 
-          echo "=========================================="
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━"
 
           echo "📂 RESULT FILES"
 
-          echo "=========================================="
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━"
 
 
           find \
             03_RESULTS \
-            -type f \
             -maxdepth 3 \
+            -type f \
             -print \
-            | sort
+            2>/dev/null \
+            | sort || true
 
 
       # ========================================================
-      # 15. UPLOAD ARTIFACT
+      # 17. ARTIFACT BACKUP
       # ========================================================
 
       - name: Upload results
@@ -840,12 +795,14 @@ jobs:
 
           if-no-files-found: warn
 
+          retention-days: 14
+
 
       # ========================================================
-      # 16. COMPLETE
+      # 18. COMPLETE
       # ========================================================
 
-      - name: Complete
+      - name: 🏁 Complete
 
         if: always()
 
@@ -853,20 +810,20 @@ jobs:
 
           echo ""
 
-          echo "=========================================="
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━"
 
           echo "🏁 PORTFOLIO OPTION SCANNER V2"
 
-          echo "=========================================="
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━"
+
 
           echo ""
 
-          echo "Execution mode:"
-          echo "${{ steps.time.outputs.mode }}"
+          echo "Mode:"
+          echo "${{ steps.mode.outputs.mode }}"
+
 
           echo ""
-
-          echo "Pipeline:"
 
           echo "🌅 AM MARKET CONTEXT"
 
@@ -890,10 +847,7 @@ jobs:
 
           echo "🧠 SIGNAL PERFORMANCE"
 
+
           echo ""
 
-          echo "=========================================="
-
           echo "✅ WORKFLOW FINISHED"
-
-          echo "=========================================="
