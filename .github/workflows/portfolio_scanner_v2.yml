@@ -1,0 +1,335 @@
+name: PORTFOLIO OPTION SCANNER V2
+
+on:
+
+  workflow_dispatch:
+
+  schedule:
+
+    # ========================================================
+    # 08:30 ET
+    # EDT = UTC-4
+    # ========================================================
+
+    - cron: "30 12 * * 1-5"
+
+    # ========================================================
+    # 08:30 ET
+    # EST = UTC-5
+    # ========================================================
+
+    - cron: "30 13 * * 1-5"
+
+
+    # ========================================================
+    # 16:00 ET
+    # EDT = UTC-4
+    # ========================================================
+
+    - cron: "0 20 * * 1-5"
+
+    # ========================================================
+    # 16:00 ET
+    # EST = UTC-5
+    # ========================================================
+
+    - cron: "0 21 * * 1-5"
+
+
+jobs:
+
+  portfolio-scanner:
+
+    runs-on: ubuntu-latest
+
+
+    steps:
+
+      # ======================================================
+      # CHECKOUT
+      # ======================================================
+
+      - name: Checkout repository
+
+        uses: actions/checkout@v4
+
+        with:
+          fetch-depth: 1
+
+
+      # ======================================================
+      # PYTHON
+      # ======================================================
+
+      - name: Setup Python
+
+        uses: actions/setup-python@v5
+
+        with:
+          python-version: "3.12"
+
+
+      # ======================================================
+      # DEPENDENCIES
+      # ======================================================
+
+      - name: Install dependencies
+
+        run: |
+
+          python -m pip install --upgrade pip
+
+          python -m pip install \
+            pandas \
+            requests \
+            yfinance \
+            numpy
+
+
+      # ======================================================
+      # TIME
+      # ======================================================
+
+      - name: Show US Eastern Time
+
+        run: |
+
+          python - <<'PY'
+
+          from datetime import datetime
+          from zoneinfo import ZoneInfo
+
+          now = datetime.now(
+              ZoneInfo(
+                  "America/New_York"
+              )
+          )
+
+          print(
+              "=========================================="
+          )
+
+          print(
+              "🇺🇸 US EASTERN TIME"
+          )
+
+          print(
+              now.strftime(
+                  "%Y-%m-%d %H:%M:%S %Z"
+              )
+          )
+
+          print(
+              "=========================================="
+          )
+
+          PY
+
+
+      # ======================================================
+      # PYTHON PATH
+      # ======================================================
+
+      - name: Configure Python path
+
+        run: |
+
+          echo \
+            "PYTHONPATH=$GITHUB_WORKSPACE" \
+            >> "$GITHUB_ENV"
+
+
+      # ======================================================
+      # COMPILE
+      # ======================================================
+
+      - name: Compile scanner
+
+        run: |
+
+          python -m py_compile \
+            option_search.py
+
+          python -m py_compile \
+            batch_option_search.py
+
+          python -m py_compile \
+            portfolio_option_scanner_v2.py
+
+          python -m py_compile \
+            signal_performance.py
+
+
+      # ======================================================
+      # CHECK AM CONTEXT
+      # ======================================================
+
+      - name: Check AM Market Context
+
+        run: |
+
+          python - <<'PY'
+
+          import os
+
+          from datetime import datetime
+
+          from zoneinfo import ZoneInfo
+
+
+          et = ZoneInfo(
+              "America/New_York"
+          )
+
+
+          date = datetime.now(
+              et
+          ).strftime(
+              "%Y%m%d"
+          )
+
+
+          path = (
+              "03_RESULTS/daily/"
+              f"AM_MARKET_CONTEXT_{date}.json"
+          )
+
+
+          print(
+              "AM Context:"
+          )
+
+          print(
+              path
+          )
+
+
+          if not os.path.exists(
+              path
+          ):
+
+              raise FileNotFoundError(
+                  "❌ AM Context not found"
+              )
+
+
+          print(
+              "✅ AM Context found"
+          )
+
+          PY
+
+
+      # ======================================================
+      # RUN V2
+      # ======================================================
+
+      - name: Run Portfolio Option Scanner V2
+
+        env:
+
+          TELEGRAM_BOT_TOKEN:
+            ${{ secrets.TELEGRAM_BOT_TOKEN }}
+
+          TELEGRAM_CHAT_ID:
+            ${{ secrets.TELEGRAM_CHAT_ID }}
+
+          PYTHONIOENCODING: utf-8
+
+          PYTHONPATH:
+            ${{ github.workspace }}
+
+
+        run: |
+
+          python \
+            portfolio_option_scanner_v2.py
+
+
+      # ======================================================
+      # VERIFY
+      # ======================================================
+
+      - name: Verify final ranking
+
+        run: |
+
+          set -e
+
+
+          FILE="03_RESULTS/daily/OPTION_FINAL_RANKING.csv"
+
+
+          if [
+            ! -f "$FILE"
+          ]; then
+
+            echo \
+              "❌ FINAL RANKING NOT FOUND"
+
+            exit 1
+
+          fi
+
+
+          echo \
+            "✅ FINAL RANKING FOUND"
+
+
+          echo ""
+
+          echo \
+            "=========================================="
+
+          echo \
+            "📊 FINAL RANKING"
+
+          echo \
+            "=========================================="
+
+
+          cat "$FILE"
+
+
+      # ======================================================
+      # ARTIFACT
+      # ======================================================
+
+      - name: Upload results
+
+        uses: actions/upload-artifact@v4
+
+        with:
+
+          name:
+            portfolio-option-results-${{ github.run_id }}
+
+          path: |
+
+            03_RESULTS/daily/*.csv
+
+            03_RESULTS/daily/*.json
+
+            03_RESULTS/daily/*.txt
+
+            03_RESULTS/history/*.csv
+
+          if-no-files-found: warn
+
+
+      # ======================================================
+      # COMPLETE
+      # ======================================================
+
+      - name: Complete
+
+        run: |
+
+          echo \
+            "=========================================="
+
+          echo \
+            "✅ PORTFOLIO OPTION SCANNER V2 COMPLETE"
+
+          echo \
+            "=========================================="
