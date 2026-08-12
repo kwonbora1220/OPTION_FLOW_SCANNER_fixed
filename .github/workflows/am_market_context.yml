@@ -4,98 +4,249 @@ on:
   workflow_dispatch:
 
   schedule:
-    # 08:00 ET during EDT (UTC-4)
-    - cron: "0 12 * * 1-5"
+    # ========================================================
+    # 08:00 ET
+    #
+    # EDT (UTC-4) -> 12:00 UTC
+    # EST (UTC-5) -> 13:00 UTC
+    # ========================================================
 
-    # 08:00 ET during EST (UTC-5)
+    - cron: "0 12 * * 1-5"
     - cron: "0 13 * * 1-5"
 
+
 jobs:
+
   am-market-context:
+
     runs-on: ubuntu-latest
 
+
     steps:
+
+      # ======================================================
+      # CHECKOUT
+      # ======================================================
+
       - name: Checkout
+
         uses: actions/checkout@v4
 
+
+      # ======================================================
+      # PYTHON
+      # ======================================================
+
       - name: Setup Python
+
         uses: actions/setup-python@v5
+
         with:
           python-version: "3.11"
 
+
+      # ======================================================
+      # DEPENDENCIES
+      # ======================================================
+
       - name: Install dependencies
+
         run: |
+
           python -m pip install --upgrade pip
-          pip install yfinance pandas numpy requests
+
+          pip install \
+            yfinance \
+            pandas \
+            numpy \
+            requests
+
+
+      # ======================================================
+      # SHOW US EASTERN TIME
+      # ======================================================
 
       - name: Check US Eastern Time
+
         run: |
+
           python - <<'PY'
+
           from datetime import datetime
           from zoneinfo import ZoneInfo
 
-          now = datetime.now(ZoneInfo("America/New_York"))
+          now = datetime.now(
+              ZoneInfo("America/New_York")
+          )
 
-          print("US Eastern Time:", now)
-          print("Hour:", now.hour)
-          print("Minute:", now.minute)
-          print("Weekday:", now.weekday())
+          print("━━━━━━━━━━━━━━━━━━━━━━━━")
+          print("🇺🇸 US EASTERN TIME")
+          print("━━━━━━━━━━━━━━━━━━━━━━━━")
 
-          if not (
-              now.weekday() < 5
-              and now.hour == 8
-          ):
-              print("⚠️ This workflow was triggered outside AM target time.")
-              print("The analysis will still run.")
-          else:
-              print("✅ AM target time confirmed.")
+          print(
+              "Current:",
+              now.strftime(
+                  "%Y-%m-%d %H:%M:%S %Z"
+              )
+          )
+
+          print(
+              "Date:",
+              now.strftime("%Y%m%d")
+          )
+
+          print(
+              "Hour:",
+              now.hour
+          )
+
+          print(
+              "Minute:",
+              now.minute
+          )
+
+          print("━━━━━━━━━━━━━━━━━━━━━━━━")
+
           PY
 
+
+      # ======================================================
+      # RUN AM MARKET CONTEXT
+      # ======================================================
+
       - name: Run AM Market Context
+
         run: |
-          python 01_MARKET_CONTEXT/am_market_context.py
+
+          python \
+            01_MARKET_CONTEXT/am_market_context.py
+
+
+      # ======================================================
+      # VERIFY AM RESULT
+      # ======================================================
+
+      - name: Verify AM Result
+
+        run: |
+
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📂 AM RESULT FILES"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━"
+
+          find \
+            03_RESULTS/daily \
+            -maxdepth 1 \
+            -type f \
+            -name "AM_MARKET_CONTEXT_*" \
+            -print
+
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📄 LATEST AM FILE"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━"
+
+          ls -lt \
+            03_RESULTS/daily/AM_MARKET_CONTEXT_*.txt \
+            | head -5
+
+
+      # ======================================================
+      # SEND TELEGRAM
+      # ======================================================
 
       - name: Send AM Telegram
+
         env:
+
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+
         run: |
+
           python - <<'PY'
+
           import os
           import requests
+
           from pathlib import Path
+
+
+          # ==================================================
+          # RESULT DIRECTORY
+          # ==================================================
 
           result_dir = Path(
               "03_RESULTS/daily"
           )
 
+
+          # ==================================================
+          # FIND LATEST AM REPORT
+          # ==================================================
+
           files = sorted(
+
               result_dir.glob(
                   "AM_MARKET_CONTEXT_*.txt"
               ),
-              key=lambda x: x.stat().st_mtime,
+
+              key=lambda p:
+                  p.stat().st_mtime,
+
               reverse=True
           )
 
+
           if not files:
+
               raise FileNotFoundError(
-                  "AM_MARKET_CONTEXT_*.txt 파일을 찾을 수 없습니다."
+
+                  "❌ "
+                  "AM_MARKET_CONTEXT_*.txt "
+                  "파일을 찾을 수 없습니다."
+
               )
+
+
+          # ==================================================
+          # USE LATEST FILE
+          # ==================================================
 
           path = files[0]
 
+
           print(
-              f"📄 Telegram 전송 파일: {path}"
+              "📄 Telegram 전송 파일:"
           )
+
+          print(
+              path
+          )
+
+
+          # ==================================================
+          # READ
+          # ==================================================
 
           text = path.read_text(
               encoding="utf-8"
           )
 
+
           if not text.strip():
+
               raise RuntimeError(
-                  "AM 결과 파일이 비어 있습니다."
+
+                  "❌ AM 보고서가 비어 있습니다."
+
               )
+
+
+          # ==================================================
+          # TELEGRAM CONFIG
+          # ==================================================
 
           token = os.environ[
               "TELEGRAM_BOT_TOKEN"
@@ -105,35 +256,84 @@ jobs:
               "TELEGRAM_CHAT_ID"
           ]
 
+
+          # ==================================================
+          # TELEGRAM API
+          # ==================================================
+
           url = (
-              f"https://api.telegram.org/"
+
+              "https://api.telegram.org/"
               f"bot{token}/sendMessage"
+
           )
+
+
+          payload = {
+
+              "chat_id":
+                  chat_id,
+
+              "text":
+                  text,
+
+              "parse_mode":
+                  "HTML",
+
+              "disable_web_page_preview":
+                  True,
+
+          }
+
+
+          # ==================================================
+          # SEND
+          # ==================================================
 
           response = requests.post(
+
               url,
-              json={
-                  "chat_id": chat_id,
-                  "text": text,
-                  "parse_mode": "HTML",
-                  "disable_web_page_preview": True,
-              },
-              timeout=30,
+
+              json=payload,
+
+              timeout=30
+
           )
 
+
           print(
-              "Telegram status:",
+              "Telegram HTTP:",
               response.status_code
+          )
+
+
+          print(
+              "Telegram response:"
           )
 
           print(
               response.text
           )
 
+
           response.raise_for_status()
 
+
+          # ==================================================
+          # SUCCESS
+          # ==================================================
+
           print(
-              "✅ AM Telegram sent successfully"
+              "━━━━━━━━━━━━━━━━━━━━━━━━"
           )
+
+          print(
+              "✅ AM TELEGRAM SENT"
+          )
+
+          print(
+              "━━━━━━━━━━━━━━━━━━━━━━━━"
+
+          )
+
           PY
-        
