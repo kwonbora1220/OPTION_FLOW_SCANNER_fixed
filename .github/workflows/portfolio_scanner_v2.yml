@@ -1,3 +1,4 @@
+
 name: PORTFOLIO OPTION SCANNER V2
 
 on:
@@ -25,23 +26,23 @@ on:
 
 
   # ==========================================================
-  # GitHub cron은 UTC
+  # GitHub cron은 UTC 기준
   #
-  # EDT 기준
-  # 08:00 ET  = 12:00 UTC
-  # 08:30 ET  = 12:30 UTC
-  # 16:00 ET  = 20:00 UTC
-  # 16:05 ET  = 20:05 UTC
+  # EDT
+  # 08:00 ET = 12:00 UTC
+  # 08:30 ET = 12:30 UTC
+  # 16:00 ET = 20:00 UTC
+  # 16:05 ET = 20:05 UTC
   #
-  # EST 기준
-  # 08:00 ET  = 13:00 UTC
-  # 08:30 ET  = 13:30 UTC
-  # 16:00 ET  = 21:00 UTC
-  # 16:05 ET  = 21:05 UTC
+  # EST
+  # 08:00 ET = 13:00 UTC
+  # 08:30 ET = 13:30 UTC
+  # 16:00 ET = 21:00 UTC
+  # 16:05 ET = 21:05 UTC
   #
-  # 두 세트를 모두 등록하고
-  # 실제 New York 시간을 확인해서
-  # 맞는 시간만 실행한다.
+  # 두 세트를 모두 등록한다.
+  # 실제 New York 시간을 확인하여
+  # 올바른 단계만 실행한다.
   # ==========================================================
 
   schedule:
@@ -73,11 +74,9 @@ concurrency:
 
 jobs:
 
-
   portfolio-scanner-v2:
 
     runs-on: ubuntu-latest
-
 
     steps:
 
@@ -143,20 +142,17 @@ jobs:
       # ======================================================
       # 5. DETERMINE RUN MODE
       #
-      # 핵심 수정
+      # 수동:
+      #   am
+      #   option
+      #   pm
+      #   full
       #
-      # ① 수동 실행
-      #    am / option / pm / full
-      #    → 그대로 실행
+      # auto:
+      #   현재 New York 시간으로 판단
       #
-      # ② 수동 auto
-      #    → 현재 New York 시간을 보고 결정
-      #
-      # ③ schedule
-      #    → cron보다 실제 New York 시간을 우선
-      #
-      # 따라서 GitHub Actions가 약간 늦게 시작해도
-      # 잘못된 단계가 실행될 가능성을 줄인다.
+      # schedule:
+      #   cron이 약간 늦어져도 실제 ET 기준으로 판단
       # ======================================================
 
       - name: Determine execution mode
@@ -206,10 +202,11 @@ jobs:
 
           minute = now.minute
 
+          total_minutes = (
+              hour * 60
+              + minute
+          )
 
-          # ==================================================
-          # PRINT TIME
-          # ==================================================
 
           print(
               "=========================================="
@@ -253,66 +250,64 @@ jobs:
 
           else:
 
-              # =================================================
-              # AUTO MODE
-              #
-              # 시간 범위로 판단
-              #
-              # 08:00 ± 15분 → AM
-              # 08:30 ± 15분 → OPTION
-              # 16:00 ± 15분 → OPTION
-              # 16:05 ± 15분 → PM
-              #
-              # GitHub Actions 지연을 어느 정도 허용
-              # =================================================
-
-              total_minutes = (
-                  hour * 60
-                  + minute
-              )
-
-
               mode = "none"
 
 
-              # -----------------------------------------------
-              # 08:00 ET
-              # -----------------------------------------------
+              # =================================================
+              # 08:00 ET → AM
+              # =================================================
 
-              if 7 * 60 + 45 <= total_minutes <= 8 * 60 + 15:
+              if (
+                  7 * 60 + 45
+                  <= total_minutes
+                  <= 8 * 60 + 15
+              ):
 
                   mode = "am"
 
 
-              # -----------------------------------------------
-              # 08:30 ET
-              # -----------------------------------------------
+              # =================================================
+              # 08:30 ET → OPTION
+              # =================================================
 
-              elif 8 * 60 + 15 <= total_minutes <= 8 * 60 + 50:
-
-                  mode = "option"
-
-
-              # -----------------------------------------------
-              # 16:00 ET
-              # -----------------------------------------------
-
-              elif 15 * 60 + 45 <= total_minutes <= 16 * 60 + 15:
+              elif (
+                  8 * 60 + 15
+                  <= total_minutes
+                  <= 8 * 60 + 50
+              ):
 
                   mode = "option"
 
 
-              # -----------------------------------------------
-              # 16:05 ET
-              # -----------------------------------------------
+              # =================================================
+              # 16:00 ET → OPTION
+              # =================================================
 
-              elif 16 * 60 + 0 <= total_minutes <= 16 * 60 + 25:
+              elif (
+                  15 * 60 + 45
+                  <= total_minutes
+                  <= 16 * 60 + 15
+              ):
+
+                  mode = "option"
+
+
+              # =================================================
+              # 16:05 ET → PM
+              # =================================================
+
+              elif (
+                  16 * 60
+                  <= total_minutes
+                  <= 16 * 60 + 25
+              ):
 
                   mode = "pm"
 
 
               print(
-                  f"🕐 AUTO TIME CHECK → {now.strftime('%H:%M:%S %Z')}"
+                  f"🕐 AUTO TIME CHECK → "
+                  f"{now.strftime('%H:%M:%S %Z')}"
               )
 
               print(
@@ -371,10 +366,8 @@ jobs:
       # ======================================================
       # 6. PREPARE RESULT DIRECTORIES
       #
-      # 중요:
-      #
-      # 03_RESULTS는 Git에 존재하지 않아도 된다.
-      # 실행 전에 확실하게 생성한다.
+      # 03_RESULTS가 Git에 없어도
+      # 실행 전에 자동 생성한다.
       # ======================================================
 
       - name: 📁 Prepare result directories
@@ -393,11 +386,11 @@ jobs:
 
           echo "=========================================="
 
-          ls -la 03_RESULTS
-
-          ls -la 03_RESULTS/daily
-
-          ls -la 03_RESULTS/history
+          find 03_RESULTS \
+            -maxdepth 2 \
+            -type d \
+            -print \
+            | sort
 
 
       # ======================================================
@@ -410,7 +403,6 @@ jobs:
 
           set -e
 
-
           python -m py_compile \
             01_MARKET_CONTEXT/am_market_context.py \
             01_MARKET_CONTEXT/pm_volatility_update.py \
@@ -421,20 +413,19 @@ jobs:
             signal_performance.py \
             portfolio_option_scanner_v2.py
 
-
           echo "✅ Python compile check passed"
 
 
       # ======================================================
       # 8. AM MARKET CONTEXT
+      #
+      # 08:00 ET
       # ======================================================
 
       - name: 🌅 AM Market Context
 
         if: |
-
           steps.mode.outputs.mode == 'am' ||
-
           steps.mode.outputs.mode == 'full'
 
         env:
@@ -448,7 +439,6 @@ jobs:
         run: |
 
           set -e
-
 
           echo "━━━━━━━━━━━━━━━━━━━━━━━━"
 
@@ -467,13 +457,13 @@ jobs:
 
           echo "📂 AM RESULT"
 
-
           find \
             03_RESULTS/daily \
             -maxdepth 1 \
             -type f \
             -name "AM_MARKET_CONTEXT_*" \
-            -print || true
+            -print \
+            | sort || true
 
 
       # ======================================================
@@ -483,22 +473,20 @@ jobs:
       - name: 🔎 Verify AM Result
 
         if: |
-
           steps.mode.outputs.mode == 'am' ||
-
           steps.mode.outputs.mode == 'full'
 
         run: |
 
           set -e
 
-
           DATE="${{ steps.mode.outputs.market_date }}"
 
           JSON_FILE="03_RESULTS/daily/AM_MARKET_CONTEXT_${DATE}.json"
 
 
-          echo "Expected: $JSON_FILE"
+          echo "Expected:"
+          echo "$JSON_FILE"
 
 
           if [ ! -f "$JSON_FILE" ]; then
@@ -513,7 +501,8 @@ jobs:
               03_RESULTS/daily \
               -maxdepth 1 \
               -type f \
-              -print || true
+              -print \
+              | sort || true
 
             exit 1
 
@@ -526,15 +515,20 @@ jobs:
 
 
       # ======================================================
-      # 10. PERSIST AM
+      # 10. PERSIST AM CONTEXT
+      #
+      # 매우 중요:
+      #
+      # AM 실행과 OPTION 실행은 서로 다른
+      # GitHub Actions 실행이다.
+      #
+      # 따라서 AM JSON을 main에 저장한다.
       # ======================================================
 
       - name: 💾 Persist AM Context
 
         if: |
-
           steps.mode.outputs.mode == 'am' ||
-
           steps.mode.outputs.mode == 'full'
 
         run: |
@@ -545,13 +539,12 @@ jobs:
           git config user.name \
             "github-actions[bot]"
 
-
           git config user.email \
             "41898282+github-actions[bot]@users.noreply.github.com"
 
 
           git add -f \
-            03_RESULTS/daily \
+            03_RESULTS \
             2>/dev/null || true
 
 
@@ -571,14 +564,15 @@ jobs:
 
       # ======================================================
       # 11. VERIFY AM BEFORE OPTION
+      #
+      # 08:30 OPTION 실행 전에
+      # 오늘 AM JSON이 반드시 존재해야 한다.
       # ======================================================
 
       - name: 🔎 Verify AM Context Before Option
 
         if: |
-
           steps.mode.outputs.mode == 'option' ||
-
           steps.mode.outputs.mode == 'full'
 
         run: |
@@ -592,7 +586,6 @@ jobs:
 
 
           echo "Expected AM Context:"
-
           echo "$FILE"
 
 
@@ -610,7 +603,8 @@ jobs:
               03_RESULTS \
               -maxdepth 3 \
               -type f \
-              -print || true
+              -print \
+              | sort || true
 
             exit 1
 
@@ -622,14 +616,24 @@ jobs:
 
       # ======================================================
       # 12. OPTION SEARCH
+      #
+      # AM Context
+      #      ↓
+      # OPTION SEARCH
+      #      ↓
+      # OI DELTA
+      #      ↓
+      # FINAL TRADING LIST
+      #
+      # 08:30 ET
+      # 또는
+      # 16:00 ET
       # ======================================================
 
       - name: 🔥 Portfolio Option Scanner V2
 
         if: |
-
           steps.mode.outputs.mode == 'option' ||
-
           steps.mode.outputs.mode == 'full'
 
         env:
@@ -659,6 +663,9 @@ jobs:
           echo "🎯 FINAL TRADING LIST"
 
 
+          echo ""
+
+
           python \
             portfolio_option_scanner_v2.py
 
@@ -677,15 +684,13 @@ jobs:
 
 
       # ======================================================
-      # 13. VERIFY FINAL RANKING
+      # 13. VERIFY FINAL TRADING LIST
       # ======================================================
 
       - name: 🎯 Verify Final Trading List
 
         if: |
-
           steps.mode.outputs.mode == 'option' ||
-
           steps.mode.outputs.mode == 'full'
 
         run: |
@@ -728,6 +733,8 @@ jobs:
 
           echo ""
 
+          echo "📊 TOP 30"
+
           head -30 "$FILE"
 
 
@@ -738,9 +745,7 @@ jobs:
       - name: 💾 Persist Option Results
 
         if: |
-
           steps.mode.outputs.mode == 'option' ||
-
           steps.mode.outputs.mode == 'full'
 
         run: |
@@ -750,7 +755,6 @@ jobs:
 
           git config user.name \
             "github-actions[bot]"
-
 
           git config user.email \
             "41898282+github-actions[bot]@users.noreply.github.com"
@@ -777,14 +781,14 @@ jobs:
 
       # ======================================================
       # 15. PM VOLATILITY UPDATE
+      #
+      # 16:05 ET
       # ======================================================
 
       - name: 🌙 PM Volatility Update
 
         if: |
-
           steps.mode.outputs.mode == 'pm' ||
-
           steps.mode.outputs.mode == 'full'
 
         env:
@@ -820,9 +824,7 @@ jobs:
       - name: 🧠 Signal Performance
 
         if: |
-
           steps.mode.outputs.mode == 'pm' ||
-
           steps.mode.outputs.mode == 'full'
 
         env:
@@ -872,9 +874,7 @@ jobs:
       - name: 💾 Persist PM Results
 
         if: |
-
           steps.mode.outputs.mode == 'pm' ||
-
           steps.mode.outputs.mode == 'full'
 
         run: |
@@ -884,7 +884,6 @@ jobs:
 
           git config user.name \
             "github-actions[bot]"
-
 
           git config user.email \
             "41898282+github-actions[bot]@users.noreply.github.com"
@@ -910,9 +909,9 @@ jobs:
 
 
       # ======================================================
-      # 18. RESULT FILES
+      # 18. SHOW ALL RESULT FILES
       #
-      # 항상 실제 생성된 파일을 보여준다.
+      # 항상 실행
       # ======================================================
 
       - name: 📂 Show result files
@@ -947,11 +946,9 @@ jobs:
       # ======================================================
       # 19. ARTIFACT BACKUP
       #
-      # 기존처럼 특정 확장자만 찾지 않고
-      # 03_RESULTS 전체를 백업한다.
+      # 특정 csv/json/txt만 지정하지 않는다.
       #
-      # 그리고 디렉터리가 없더라도
-      # 먼저 생성했으므로 경고가 발생하지 않는다.
+      # 03_RESULTS 전체를 백업한다.
       # ======================================================
 
       - name: 📦 Upload results
@@ -996,16 +993,18 @@ jobs:
           echo ""
 
           echo "Mode:"
-
           echo "${{ steps.mode.outputs.mode }}"
 
 
           echo ""
 
           echo "Market Date:"
-
           echo "${{ steps.mode.outputs.market_date }}"
 
+
+          echo ""
+
+          echo "PIPELINE"
 
           echo ""
 
@@ -1037,15 +1036,19 @@ jobs:
           echo "📂 FINAL RESULT FILES"
 
 
-          find \
-            03_RESULTS \
-            -maxdepth 3 \
-            -type f \
-            -print \
-            2>/dev/null \
-            | sort || true
+          if [ -d "03_RESULTS" ]; then
+
+            find \
+              03_RESULTS \
+              -maxdepth 3 \
+              -type f \
+              -print \
+              | sort
+
+          fi
 
 
           echo ""
 
           echo "✅ WORKFLOW FINISHED"
+
