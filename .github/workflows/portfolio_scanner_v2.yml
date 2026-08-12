@@ -1,0 +1,899 @@
+name: PORTFOLIO OPTION SCANNER V2
+
+on:
+
+  # ============================================================
+  # MANUAL RUN
+  # ============================================================
+
+  workflow_dispatch:
+
+    inputs:
+
+      mode:
+        description: "실행 모드"
+        required: false
+        default: "auto"
+
+        type: choice
+
+        options:
+          - auto
+          - am
+          - option
+          - pm
+          - full
+
+
+  # ============================================================
+  # AUTOMATIC SCHEDULE
+  #
+  # 미국 동부시간 기준
+  #
+  # 08:00 ET
+  # 08:30 ET
+  # 16:00 ET
+  # 16:05 ET
+  #
+  # EDT / EST 차이를 고려하여 각각 UTC 두 개 등록
+  # ============================================================
+
+  schedule:
+
+    # ----------------------------------------------------------
+    # 08:00 ET - EDT
+    # ----------------------------------------------------------
+
+    - cron: "0 12 * * 1-5"
+
+    # ----------------------------------------------------------
+    # 08:00 ET - EST
+    # ----------------------------------------------------------
+
+    - cron: "0 13 * * 1-5"
+
+
+    # ----------------------------------------------------------
+    # 08:30 ET - EDT
+    # ----------------------------------------------------------
+
+    - cron: "30 12 * * 1-5"
+
+    # ----------------------------------------------------------
+    # 08:30 ET - EST
+    # ----------------------------------------------------------
+
+    - cron: "30 13 * * 1-5"
+
+
+    # ----------------------------------------------------------
+    # 16:00 ET - EDT
+    # ----------------------------------------------------------
+
+    - cron: "0 20 * * 1-5"
+
+    # ----------------------------------------------------------
+    # 16:00 ET - EST
+    # ----------------------------------------------------------
+
+    - cron: "0 21 * * 1-5"
+
+
+    # ----------------------------------------------------------
+    # 16:05 ET - EDT
+    # ----------------------------------------------------------
+
+    - cron: "5 20 * * 1-5"
+
+    # ----------------------------------------------------------
+    # 16:05 ET - EST
+    # ----------------------------------------------------------
+
+    - cron: "5 21 * * 1-5"
+
+
+# ==============================================================
+# JOB
+# ==============================================================
+
+jobs:
+
+  portfolio-scanner-v2:
+
+    runs-on: ubuntu-latest
+
+
+    steps:
+
+      # ========================================================
+      # 1. CHECKOUT
+      # ========================================================
+
+      - name: Checkout repository
+
+        uses: actions/checkout@v4
+
+        with:
+
+          fetch-depth: 1
+
+
+      # ========================================================
+      # 2. PYTHON
+      # ========================================================
+
+      - name: Setup Python
+
+        uses: actions/setup-python@v5
+
+        with:
+
+          python-version: "3.12"
+
+
+      # ========================================================
+      # 3. INSTALL DEPENDENCIES
+      # ========================================================
+
+      - name: Install dependencies
+
+        run: |
+
+          python -m pip install --upgrade pip
+
+          pip install \
+            pandas \
+            numpy \
+            requests \
+            yfinance
+
+
+      # ========================================================
+      # 4. PYTHON PATH
+      # ========================================================
+
+      - name: Configure Python path
+
+        run: |
+
+          echo "PYTHONPATH=$GITHUB_WORKSPACE" >> "$GITHUB_ENV"
+
+
+      # ========================================================
+      # 5. CHECK US EASTERN TIME
+      # ========================================================
+
+      - name: Check US Eastern Time
+
+        id: time
+
+        run: |
+
+          python - <<'PY'
+
+          from datetime import datetime
+
+          from zoneinfo import ZoneInfo
+
+
+          et = ZoneInfo(
+              "America/New_York"
+          )
+
+
+          now = datetime.now(
+              et
+          )
+
+
+          print(
+              "=========================================="
+          )
+
+          print(
+              "🇺🇸 US EASTERN TIME"
+          )
+
+          print(
+              now.strftime(
+                  "%Y-%m-%d %H:%M:%S %Z"
+              )
+          )
+
+          print(
+              "=========================================="
+          )
+
+
+          # ----------------------------------------------------
+          # Determine execution mode
+          # ----------------------------------------------------
+
+          hour = now.hour
+
+          minute = now.minute
+
+
+          # ----------------------------------------------------
+          # Manual execution
+          # ----------------------------------------------------
+
+          manual_mode = (
+              "${{ github.event.inputs.mode }}"
+          )
+
+
+          if manual_mode and manual_mode != "auto":
+
+              mode = manual_mode
+
+
+          else:
+
+              # ------------------------------------------------
+              # Automatic schedule
+              # ------------------------------------------------
+
+              if (
+                  hour == 8
+                  and minute < 30
+              ):
+
+                  mode = "am"
+
+
+              elif (
+                  hour == 8
+                  and minute >= 30
+              ):
+
+                  mode = "option"
+
+
+              elif hour == 16:
+
+                  if minute <= 2:
+
+                      mode = "option"
+
+                  else:
+
+                      mode = "pm"
+
+
+              else:
+
+                  mode = "auto"
+
+
+          print(
+              f"RUN_MODE={mode}"
+          )
+
+
+          with open(
+              "${{ github.output }}",
+              "a"
+          ) as f:
+
+              f.write(
+                  f"mode={mode}\n"
+              )
+
+          PY
+
+
+      # ========================================================
+      # 6. DISPLAY MODE
+      # ========================================================
+
+      - name: Display execution mode
+
+        run: |
+
+          echo "=========================================="
+
+          echo "🚀 PORTFOLIO OPTION SCANNER V2"
+
+          echo "=========================================="
+
+          echo ""
+
+          echo "Execution mode: ${{ steps.time.outputs.mode }}"
+
+          echo ""
+
+
+      # ========================================================
+      # 7. COMPILE CHECK
+      # ========================================================
+
+      - name: Compile Python files
+
+        run: |
+
+          set -e
+
+
+          echo "=========================================="
+
+          echo "🐍 PYTHON COMPILE CHECK"
+
+          echo "=========================================="
+
+
+          # ----------------------------------------------------
+          # AM
+          # ----------------------------------------------------
+
+          if [
+            -f "01_MARKET_CONTEXT/am_market_context.py"
+          ]; then
+
+            python -m py_compile \
+              01_MARKET_CONTEXT/am_market_context.py
+
+          fi
+
+
+          # ----------------------------------------------------
+          # OPTION SEARCH
+          # ----------------------------------------------------
+
+          if [
+            -f "option_search.py"
+          ]; then
+
+            python -m py_compile \
+              option_search.py
+
+          fi
+
+
+          if [
+            -f "batch_option_search.py"
+          ]; then
+
+            python -m py_compile \
+              batch_option_search.py
+
+          fi
+
+
+          # ----------------------------------------------------
+          # V2
+          # ----------------------------------------------------
+
+          if [
+            -f "portfolio_option_scanner_v2.py"
+          ]; then
+
+            python -m py_compile \
+              portfolio_option_scanner_v2.py
+
+          fi
+
+
+          # ----------------------------------------------------
+          # PM
+          # ----------------------------------------------------
+
+          if [
+            -f "01_MARKET_CONTEXT/pm_volatility_update.py"
+          ]; then
+
+            python -m py_compile \
+              01_MARKET_CONTEXT/pm_volatility_update.py
+
+          fi
+
+
+          # ----------------------------------------------------
+          # PERFORMANCE
+          # ----------------------------------------------------
+
+          if [
+            -f "signal_performance.py"
+          ]; then
+
+            python -m py_compile \
+              signal_performance.py
+
+          fi
+
+
+          echo ""
+
+          echo "✅ Python compile check passed"
+
+
+      # ========================================================
+      # 8. AM MARKET CONTEXT
+      #
+      # 08:00 ET
+      # ========================================================
+
+      - name: 🌅 AM Market Context
+
+        if: |
+          steps.time.outputs.mode == 'am' ||
+          steps.time.outputs.mode == 'full' ||
+          github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'am'
+
+        run: |
+
+          set -e
+
+
+          echo "=========================================="
+
+          echo "🌅 AM MARKET CONTEXT"
+
+          echo "🇺🇸 08:00 ET"
+
+          echo "=========================================="
+
+
+          python \
+            01_MARKET_CONTEXT/am_market_context.py
+
+
+          echo ""
+
+          echo "=========================================="
+
+          echo "📂 AM RESULT"
+
+          echo "=========================================="
+
+
+          find \
+            03_RESULTS/daily \
+            -maxdepth 1 \
+            -type f \
+            -name "AM_MARKET_CONTEXT_*" \
+            -print
+
+
+      # ========================================================
+      # 9. VERIFY AM CONTEXT
+      # ========================================================
+
+      - name: Verify AM Context
+
+        if: |
+          steps.time.outputs.mode == 'option' ||
+          steps.time.outputs.mode == 'full' ||
+          github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'option'
+
+        run: |
+
+          set -e
+
+
+          python - <<'PY'
+
+          from datetime import datetime
+
+          from pathlib import Path
+
+          from zoneinfo import ZoneInfo
+
+
+          et = ZoneInfo(
+              "America/New_York"
+          )
+
+
+          date = datetime.now(
+              et
+          ).strftime(
+              "%Y%m%d"
+          )
+
+
+          path = Path(
+              "03_RESULTS/daily"
+          ) / (
+              f"AM_MARKET_CONTEXT_{date}.json"
+          )
+
+
+          print(
+              "=========================================="
+          )
+
+          print(
+              "🌅 CHECK AM MARKET CONTEXT"
+          )
+
+          print(
+              "=========================================="
+          )
+
+          print(
+              f"Expected: {path}"
+          )
+
+
+          if not path.exists():
+
+              print("")
+
+              print(
+                  "❌ AM Context 파일이 없습니다."
+              )
+
+              print("")
+
+              print(
+                  "AM 분석을 먼저 실행해야 합니다."
+              )
+
+              raise SystemExit(1)
+
+
+          print("")
+
+          print(
+              "✅ AM Context found"
+          )
+
+          print(
+              f"File: {path}"
+          )
+
+          PY
+
+
+      # ========================================================
+      # 10. OPTION SEARCH
+      #
+      # 08:30 ET / 16:00 ET
+      #
+      # AM Context → OPTION SEARCH
+      # AM Context → FINAL SCORE
+      # OI DELTA
+      # ========================================================
+
+      - name: 🔥 Portfolio Option Scanner V2
+
+        if: |
+          steps.time.outputs.mode == 'option' ||
+          steps.time.outputs.mode == 'full' ||
+          github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'option'
+
+        env:
+
+          TELEGRAM_BOT_TOKEN:
+            ${{ secrets.TELEGRAM_BOT_TOKEN }}
+
+          TELEGRAM_CHAT_ID:
+            ${{ secrets.TELEGRAM_CHAT_ID }}
+
+          PYTHONIOENCODING:
+            utf-8
+
+          PYTHONPATH:
+            ${{ github.workspace }}
+
+
+        run: |
+
+          set -e
+
+
+          echo "=========================================="
+
+          echo "🔥 PORTFOLIO OPTION SCANNER V2"
+
+          echo "=========================================="
+
+
+          echo ""
+
+          echo "🌅 AM Context → OPTION SEARCH"
+
+          echo "📊 OI DELTA"
+
+          echo "🎯 FINAL TRADING LIST"
+
+
+          echo ""
+
+
+          if [
+            -f "portfolio_option_scanner_v2.py"
+          ]; then
+
+            python \
+              portfolio_option_scanner_v2.py
+
+          else
+
+            echo ""
+            echo "❌ portfolio_option_scanner_v2.py"
+            echo "파일이 없습니다."
+            echo ""
+
+            exit 1
+
+          fi
+
+
+      # ========================================================
+      # 11. VERIFY FINAL RANKING
+      # ========================================================
+
+      - name: Verify Final Trading List
+
+        if: |
+          steps.time.outputs.mode == 'option' ||
+          steps.time.outputs.mode == 'full' ||
+          github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'option'
+
+        run: |
+
+          set -e
+
+
+          echo "=========================================="
+
+          echo "🎯 FINAL TRADING LIST"
+
+          echo "=========================================="
+
+
+          FILE="03_RESULTS/daily/OPTION_FINAL_RANKING.csv"
+
+
+          if [
+            ! -f "$FILE"
+          ]; then
+
+            echo ""
+            echo "❌ FINAL RANKING 없음"
+            echo ""
+
+            exit 1
+
+          fi
+
+
+          echo ""
+
+          echo "✅ FINAL RANKING FOUND"
+
+          echo ""
+
+          head -30 "$FILE"
+
+
+      # ========================================================
+      # 12. PM VOLATILITY UPDATE
+      #
+      # 16:05 ET
+      # ========================================================
+
+      - name: 🌙 PM Volatility Update
+
+        if: |
+          steps.time.outputs.mode == 'pm' ||
+          steps.time.outputs.mode == 'full' ||
+          github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'pm'
+
+        env:
+
+          TELEGRAM_BOT_TOKEN:
+            ${{ secrets.TELEGRAM_BOT_TOKEN }}
+
+          TELEGRAM_CHAT_ID:
+            ${{ secrets.TELEGRAM_CHAT_ID }}
+
+          PYTHONIOENCODING:
+            utf-8
+
+          PYTHONPATH:
+            ${{ github.workspace }}
+
+
+        run: |
+
+          set -e
+
+
+          echo "=========================================="
+
+          echo "🌙 PM VOLATILITY UPDATE"
+
+          echo "🇺🇸 16:05 ET"
+
+          echo "=========================================="
+
+
+          if [
+            -f "01_MARKET_CONTEXT/pm_volatility_update.py"
+          ]; then
+
+            python \
+              01_MARKET_CONTEXT/pm_volatility_update.py
+
+          else
+
+            echo ""
+
+            echo "❌ pm_volatility_update.py"
+            echo "파일이 없습니다."
+
+            echo ""
+
+            exit 1
+
+          fi
+
+
+      # ========================================================
+      # 13. SIGNAL PERFORMANCE
+      # ========================================================
+
+      - name: 🧠 Signal Performance
+
+        if: |
+          steps.time.outputs.mode == 'pm' ||
+          steps.time.outputs.mode == 'full' ||
+          github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'pm'
+
+        env:
+
+          PYTHONPATH:
+            ${{ github.workspace }}
+
+        run: |
+
+          set -e
+
+
+          echo "=========================================="
+
+          echo "🧠 SIGNAL PERFORMANCE"
+
+          echo "=========================================="
+
+
+          if [
+            -f "signal_performance.py"
+          ]; then
+
+            python - <<'PY'
+
+            from signal_performance import (
+                build_performance_message
+            )
+
+
+            print(
+                build_performance_message(
+                    limit=30
+                )
+            )
+
+            PY
+
+          else
+
+            echo ""
+            echo "⚠️ signal_performance.py 없음"
+            echo ""
+
+          fi
+
+
+      # ========================================================
+      # 14. SHOW RESULT FILES
+      # ========================================================
+
+      - name: Show result files
+
+        if: always()
+
+        run: |
+
+          echo "=========================================="
+
+          echo "📂 RESULT FILES"
+
+          echo "=========================================="
+
+
+          find \
+            03_RESULTS \
+            -type f \
+            -maxdepth 3 \
+            -print \
+            | sort
+
+
+      # ========================================================
+      # 15. UPLOAD ARTIFACT
+      # ========================================================
+
+      - name: Upload results
+
+        if: always()
+
+        uses: actions/upload-artifact@v4
+
+        with:
+
+          name:
+            portfolio-option-scanner-v2-${{ github.run_id }}
+
+          path: |
+
+            03_RESULTS/daily/*.csv
+
+            03_RESULTS/daily/*.json
+
+            03_RESULTS/daily/*.txt
+
+            03_RESULTS/history/*.csv
+
+          if-no-files-found: warn
+
+
+      # ========================================================
+      # 16. COMPLETE
+      # ========================================================
+
+      - name: Complete
+
+        if: always()
+
+        run: |
+
+          echo ""
+
+          echo "=========================================="
+
+          echo "🏁 PORTFOLIO OPTION SCANNER V2"
+
+          echo "=========================================="
+
+          echo ""
+
+          echo "Execution mode:"
+          echo "${{ steps.time.outputs.mode }}"
+
+          echo ""
+
+          echo "Pipeline:"
+
+          echo "🌅 AM MARKET CONTEXT"
+
+          echo "      ↓"
+
+          echo "🔥 OPTION SEARCH"
+
+          echo "      ↓"
+
+          echo "📊 OI DELTA"
+
+          echo "      ↓"
+
+          echo "🎯 FINAL TRADING LIST"
+
+          echo "      ↓"
+
+          echo "🌙 PM VOLATILITY UPDATE"
+
+          echo "      ↓"
+
+          echo "🧠 SIGNAL PERFORMANCE"
+
+          echo ""
+
+          echo "=========================================="
+
+          echo "✅ WORKFLOW FINISHED"
+
+          echo "=========================================="
