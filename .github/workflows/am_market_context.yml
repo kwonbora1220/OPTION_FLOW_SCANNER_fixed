@@ -1,0 +1,107 @@
+name: AM Market Context
+
+on:
+  workflow_dispatch:
+
+  schedule:
+    # 08:00 ET during EDT (UTC-4)
+    - cron: "0 12 * * 1-5"
+
+    # 08:00 ET during EST (UTC-5)
+    - cron: "0 13 * * 1-5"
+
+jobs:
+  am-market-context:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install yfinance pandas numpy requests
+
+      - name: Check US Eastern Time
+        run: |
+          python - <<'PY'
+          from datetime import datetime
+          from zoneinfo import ZoneInfo
+
+          now = datetime.now(ZoneInfo("America/New_York"))
+
+          print("US Eastern Time:", now)
+          print("Hour:", now.hour)
+          print("Minute:", now.minute)
+          print("Weekday:", now.weekday())
+
+          if not (
+              now.weekday() < 5
+              and now.hour == 8
+          ):
+              print("⚠️ This workflow was triggered outside AM target time.")
+              print("The analysis will still run.")
+          else:
+              print("✅ AM target time confirmed.")
+          PY
+
+      - name: Run AM Market Context
+        run: |
+          python 01_MARKET_CONTEXT/am_market_context.py
+
+      - name: Send AM Telegram
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python - <<'PY'
+          import os
+          import requests
+          from pathlib import Path
+          from datetime import datetime
+          from zoneinfo import ZoneInfo
+
+          et = ZoneInfo("America/New_York")
+          date_et = datetime.now(et).strftime("%Y%m%d")
+
+          path = Path(
+              f"03_RESULTS/daily/AM_MARKET_CONTEXT_{date_et}.txt"
+          )
+
+          if not path.exists():
+              raise FileNotFoundError(
+                  f"AM result not found: {path}"
+              )
+
+          text = path.read_text(
+              encoding="utf-8"
+          )
+
+          token = os.environ["TELEGRAM_BOT_TOKEN"]
+          chat_id = os.environ["TELEGRAM_CHAT_ID"]
+
+          url = (
+              f"https://api.telegram.org/bot{token}/sendMessage"
+          )
+
+          response = requests.post(
+              url,
+              json={
+                  "chat_id": chat_id,
+                  "text": text,
+                  "parse_mode": "HTML",
+                  "disable_web_page_preview": True,
+              },
+              timeout=30,
+          )
+
+          response.raise_for_status()
+
+          print("✅ AM Telegram sent")
+          PY
