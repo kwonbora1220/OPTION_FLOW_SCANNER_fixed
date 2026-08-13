@@ -289,164 +289,571 @@ def get_current_price(ticker):
     return context["option_analysis_price"]
 
 
-
 # ============================================================
 # OI HISTORY / OI DELTA
 # ============================================================
 
 def get_oi_snapshot_path(ticker, snapshot_date=None):
+
     if snapshot_date is None:
         snapshot_date = date.today()
+
+    ticker = ticker.upper().strip()
+
     return os.path.join(
         OI_HISTORY_DIR,
-        f"{ticker.upper().strip()}_OI_{snapshot_date.strftime('%Y%m%d')}.csv"
+        f"{ticker}_OI_{snapshot_date.strftime('%Y%m%d')}.csv"
     )
 
 
 def build_oi_snapshot(df):
-    cols = ["expiration", "DTE", "strike", "option_type", "openInterest"]
-    snapshot = df[cols].copy()
-    snapshot["expiration"] = snapshot["expiration"].astype(str)
-    snapshot["option_type"] = snapshot["option_type"].astype(str)
-    snapshot["strike"] = pd.to_numeric(snapshot["strike"], errors="coerce")
-    snapshot["DTE"] = pd.to_numeric(snapshot["DTE"], errors="coerce")
-    snapshot["openInterest"] = pd.to_numeric(
-        snapshot["openInterest"], errors="coerce"
-    ).fillna(0).clip(lower=0)
-    snapshot = snapshot.dropna(
-        subset=["expiration", "strike", "option_type"]
+
+    required_cols = [
+        "expiration",
+        "DTE",
+        "strike",
+        "option_type",
+        "openInterest"
+    ]
+
+    missing = [
+        c for c in required_cols
+        if c not in df.columns
+    ]
+
+    if missing:
+        raise ValueError(
+            f"OI snapshot 필수 컬럼 누락: {missing}"
+        )
+
+    snapshot = df[required_cols].copy()
+
+    snapshot["expiration"] = (
+        snapshot["expiration"]
+        .astype(str)
+        .str.strip()
     )
-    return snapshot.drop_duplicates(
-        subset=["expiration", "strike", "option_type"],
+
+    snapshot["option_type"] = (
+        snapshot["option_type"]
+        .astype(str)
+        .str.upper()
+        .str.strip()
+    )
+
+    snapshot["strike"] = pd.to_numeric(
+        snapshot["strike"],
+        errors="coerce"
+    )
+
+    snapshot["DTE"] = pd.to_numeric(
+        snapshot["DTE"],
+        errors="coerce"
+    )
+
+    snapshot["openInterest"] = pd.to_numeric(
+        snapshot["openInterest"],
+        errors="coerce"
+    ).fillna(0)
+
+    snapshot["openInterest"] = (
+        snapshot["openInterest"]
+        .clip(lower=0)
+    )
+
+    snapshot = snapshot.dropna(
+        subset=[
+            "expiration",
+            "strike",
+            "option_type"
+        ]
+    )
+
+    snapshot = snapshot[
+        snapshot["option_type"].isin(
+            ["CALL", "PUT"]
+        )
+    ]
+
+    # 동일 옵션 중복 제거
+    snapshot = snapshot.drop_duplicates(
+        subset=[
+            "expiration",
+            "strike",
+            "option_type"
+        ],
         keep="last"
     )
 
+    return snapshot
 
-def find_previous_oi_snapshot(ticker, current_date=None):
-    import glob
+
+def find_previous_oi_snapshot(
+    ticker,
+    current_date=None
+):
+
     if current_date is None:
         current_date = date.today()
 
+    ticker = ticker.upper().strip()
+
     pattern = os.path.join(
         OI_HISTORY_DIR,
-        f"{ticker.upper().strip()}_OI_*.csv"
+        f"{ticker}_OI_*.csv"
     )
 
     candidates = []
+
+    import glob
+
     for path in glob.glob(pattern):
+
+        filename = os.path.basename(path)
+
         match = re.search(
             r"_OI_(\d{8})\.csv$",
-            os.path.basename(path)
+            filename
         )
+
         if not match:
             continue
+
         try:
+
             snapshot_date = datetime.strptime(
-                match.group(1), "%Y%m%d"
+                match.group(1),
+                "%Y%m%d"
             ).date()
+
         except Exception:
             continue
+
+        # 오늘보다 이전 날짜만 인정
         if snapshot_date < current_date:
-            candidates.append((snapshot_date, path))
+
+            candidates.append(
+                (
+                    snapshot_date,
+                    path
+                )
+            )
 
     if not candidates:
+
         return None, None
 
-    candidates.sort(key=lambda x: x[0], reverse=True)
+    # 가장 최근 과거 스냅샷
+    candidates.sort(
+        key=lambda x: x[0],
+        reverse=True
+    )
+
     return candidates[0]
 
 
-def calculate_oi_delta(current_df, ticker):
-    df = current_df.copy()
-    df["previous_openInterest"] = 0.0
-    df["oi_delta"] = 0.0
-    df["oi_delta_available"] = False
-    df["oi_delta_status"] = "NO_PREVIOUS_SNAPSHOT"
+def load_oi_snapshot(path):
 
-    previous_date, previous_path = find_previous_oi_snapshot(ticker)
+    if not path:
+        return None
 
-    if previous_path is None:
-        return df, None
+    if not os.path.exists(path):
+        return None
 
     try:
+
         previous = pd.read_csv(
-            previous_path,
+            path,
             encoding="utf-8-sig"
         )
 
-        previous["expiration"] = previous["expiration"].astype(str)
-        previous["option_type"] = previous["option_type"].astype(str)
-        previous["strike"] = pd.to_numeric(
-            previous["strike"], errors="coerce"
+        required_cols = [
+            "expiration",
+            "strike",
+            "option_type",
+            "openInterest"
+        ]
+
+        missing = [
+            c for c in required_cols
+            if c not in previous.columns
+        ]
+
+        if missing:
+            print(
+                f"⚠️ 이전 OI 파일 컬럼 누락: "
+                f"{missing}"
+            )
+            return None
+
+        previous["expiration"] = (
+            previous["expiration"]
+            .astype(str)
+            .str.strip()
         )
+
+        previous["option_type"] = (
+            previous["option_type"]
+            .astype(str)
+            .str.upper()
+            .str.strip()
+        )
+
+        previous["strike"] = pd.to_numeric(
+            previous["strike"],
+            errors="coerce"
+        )
+
         previous["openInterest"] = pd.to_numeric(
-            previous["openInterest"], errors="coerce"
-        ).fillna(0).clip(lower=0)
+            previous["openInterest"],
+            errors="coerce"
+        ).fillna(0)
+
+        previous["openInterest"] = (
+            previous["openInterest"]
+            .clip(lower=0)
+        )
 
         previous = previous.dropna(
-            subset=["expiration", "strike", "option_type"]
-        ).drop_duplicates(
-            subset=["expiration", "strike", "option_type"],
+            subset=[
+                "expiration",
+                "strike",
+                "option_type"
+            ]
+        )
+
+        previous = previous[
+            previous["option_type"].isin(
+                ["CALL", "PUT"]
+            )
+        ]
+
+        previous = previous.drop_duplicates(
+            subset=[
+                "expiration",
+                "strike",
+                "option_type"
+            ],
             keep="last"
         )
 
-        previous = previous.rename(
-            columns={"openInterest": "previous_openInterest"}
-        )
-
-        keys = ["expiration", "strike", "option_type"]
-
-        df = df.merge(
-            previous[keys + ["previous_openInterest"]],
-            on=keys,
-            how="left",
-            suffixes=("", "_old")
-        )
-
-        if "previous_openInterest_old" in df.columns:
-            df["previous_openInterest"] = df[
-                "previous_openInterest_old"
-            ]
-            df.drop(
-                columns=["previous_openInterest_old"],
-                inplace=True
-            )
-
-        df["previous_openInterest"] = pd.to_numeric(
-            df["previous_openInterest"],
-            errors="coerce"
-        ).fillna(0).clip(lower=0)
-
-        df["oi_delta"] = (
-            df["openInterest"]
-            - df["previous_openInterest"]
-        )
-
-        df["oi_delta_available"] = True
-        df["oi_delta_status"] = (
-            f"COMPARED_WITH_{previous_date.strftime('%Y%m%d')}"
-        )
-
-        return df, previous_date
+        return previous
 
     except Exception as e:
-        print(f"⚠️ {ticker} OI 스냅샷 읽기 실패: {e}")
+
+        print(
+            f"⚠️ OI snapshot 읽기 실패: {e}"
+        )
+
+        return None
+
+
+def calculate_oi_delta(
+    current_df,
+    ticker
+):
+
+    df = current_df.copy()
+
+    # --------------------------------------------------------
+    # 기본값
+    # --------------------------------------------------------
+
+    df["previous_openInterest"] = 0.0
+    df["oi_delta"] = 0.0
+    df["oi_delta_available"] = False
+    df["oi_delta_status"] = (
+        "NO_PREVIOUS_SNAPSHOT"
+    )
+
+    ticker = ticker.upper().strip()
+
+    current_date = date.today()
+
+    previous_date, previous_path = (
+        find_previous_oi_snapshot(
+            ticker,
+            current_date
+        )
+    )
+
+    # --------------------------------------------------------
+    # 이전 스냅샷 없음
+    # --------------------------------------------------------
+
+    if previous_path is None:
+
+        print(
+            f"📈 {ticker}: "
+            "이전 OI snapshot 없음"
+        )
+
         return df, None
 
-
-def save_oi_snapshot(ticker, df):
-    filename = get_oi_snapshot_path(ticker)
-    snapshot = build_oi_snapshot(df)
-    snapshot.to_csv(
-        filename,
-        index=False,
-        encoding="utf-8-sig"
+    print(
+        f"📈 {ticker}: "
+        f"이전 OI snapshot 발견 → "
+        f"{previous_date.strftime('%Y-%m-%d')}"
     )
-    print(f"💾 OI 스냅샷 저장: {filename}")
-    return filename
+
+    previous = load_oi_snapshot(
+        previous_path
+    )
+
+    if previous is None:
+
+        print(
+            f"⚠️ {ticker}: "
+            "이전 OI snapshot 읽기 실패"
+        )
+
+        return df, None
+
+    # --------------------------------------------------------
+    # 현재 데이터 정리
+    # --------------------------------------------------------
+
+    df["expiration"] = (
+        df["expiration"]
+        .astype(str)
+        .str.strip()
+    )
+
+    df["option_type"] = (
+        df["option_type"]
+        .astype(str)
+        .str.upper()
+        .str.strip()
+    )
+
+    df["strike"] = pd.to_numeric(
+        df["strike"],
+        errors="coerce"
+    )
+
+    df["openInterest"] = pd.to_numeric(
+        df["openInterest"],
+        errors="coerce"
+    ).fillna(0)
+
+    df["openInterest"] = (
+        df["openInterest"]
+        .clip(lower=0)
+    )
+
+    # --------------------------------------------------------
+    # 이전 OI 이름 변경
+    # --------------------------------------------------------
+
+    previous = previous[
+        [
+            "expiration",
+            "strike",
+            "option_type",
+            "openInterest"
+        ]
+    ].copy()
+
+    previous = previous.rename(
+        columns={
+            "openInterest":
+            "previous_openInterest"
+        }
+    )
+
+    # --------------------------------------------------------
+    # 정확한 option key
+    #
+    # expiration
+    # strike
+    # option_type
+    # --------------------------------------------------------
+
+    keys = [
+        "expiration",
+        "strike",
+        "option_type"
+    ]
+
+    # --------------------------------------------------------
+    # 기존 previous 값 제거 후 merge
+    # --------------------------------------------------------
+
+    if "previous_openInterest" in df.columns:
+
+        df = df.drop(
+            columns=["previous_openInterest"]
+        )
+
+    df = df.merge(
+        previous,
+        on=keys,
+        how="left"
+    )
+
+    # --------------------------------------------------------
+    # 이전에 존재하지 않았던 옵션
+    #
+    # 신규 옵션은 이전 OI = 0
+    # --------------------------------------------------------
+
+    missing_previous = (
+        df["previous_openInterest"]
+        .isna()
+    )
+
+    df["previous_openInterest"] = (
+        pd.to_numeric(
+            df["previous_openInterest"],
+            errors="coerce"
+        )
+        .fillna(0)
+        .clip(lower=0)
+    )
+
+    # --------------------------------------------------------
+    # OI DELTA
+    # --------------------------------------------------------
+
+    df["oi_delta"] = (
+        df["openInterest"]
+        -
+        df["previous_openInterest"]
+    )
+
+    # --------------------------------------------------------
+    # 비교 가능 상태
+    #
+    # 전체 데이터가 이전 snapshot과 비교되었다는 의미
+    # --------------------------------------------------------
+
+    df["oi_delta_available"] = True
+
+    df["oi_delta_status"] = (
+        f"COMPARED_WITH_"
+        f"{previous_date.strftime('%Y%m%d')}"
+    )
+
+    # --------------------------------------------------------
+    # 로그
+    # --------------------------------------------------------
+
+    total_current_oi = float(
+        df["openInterest"].sum()
+    )
+
+    total_previous_oi = float(
+        df["previous_openInterest"].sum()
+    )
+
+    total_delta = float(
+        df["oi_delta"].sum()
+    )
+
+    matched_count = int(
+        (~missing_previous).sum()
+    )
+
+    new_count = int(
+        missing_previous.sum()
+    )
+
+    print(
+        "📊 OI 비교 결과"
+    )
+
+    print(
+        f"   현재 OI: "
+        f"{total_current_oi:,.0f}"
+    )
+
+    print(
+        f"   이전 OI: "
+        f"{total_previous_oi:,.0f}"
+    )
+
+    print(
+        f"   OI Δ: "
+        f"{total_delta:+,.0f}"
+    )
+
+    print(
+        f"   기존 옵션 매칭: "
+        f"{matched_count:,}"
+    )
+
+    print(
+        f"   신규 옵션: "
+        f"{new_count:,}"
+    )
+
+    return df, previous_date
 
 
-def find_top_oi_delta(df, current_price, top_n=5):
+def save_oi_snapshot(
+    ticker,
+    df,
+    snapshot_date=None
+):
+
+    try:
+
+        if snapshot_date is None:
+            snapshot_date = date.today()
+
+        ticker = ticker.upper().strip()
+
+        filename = get_oi_snapshot_path(
+            ticker,
+            snapshot_date
+        )
+
+        snapshot = build_oi_snapshot(
+            df
+        )
+
+        snapshot.to_csv(
+            filename,
+            index=False,
+            encoding="utf-8-sig"
+        )
+
+        print(
+            f"💾 OI 스냅샷 저장 완료:"
+        )
+
+        print(
+            f"   {filename}"
+        )
+
+        print(
+            f"   옵션 수: "
+            f"{len(snapshot):,}"
+        )
+
+        print(
+            f"   총 OI: "
+            f"{snapshot['openInterest'].sum():,.0f}"
+        )
+
+        return filename
+
+    except Exception as e:
+
+        print(
+            f"❌ OI snapshot 저장 실패: "
+            f"{e}"
+        )
+
+        return None
+
+
+def find_top_oi_delta(
+    df,
+    current_price,
+    top_n=5
+):
+
     empty = {
         "call_increase": pd.DataFrame(),
         "call_decrease": pd.DataFrame(),
@@ -457,160 +864,99 @@ def find_top_oi_delta(df, current_price, top_n=5):
     if "oi_delta" not in df.columns:
         return empty
 
+    if "oi_delta_available" not in df.columns:
+        return empty
+
     active = df[
         df["oi_delta_available"]
-        & (df["oi_delta"] != 0)
+        &
+        (df["oi_delta"] != 0)
     ].copy()
 
     if active.empty:
         return empty
 
     active["distance_pct"] = (
-        abs(active["strike"] - current_price)
+        abs(
+            active["strike"]
+            - current_price
+        )
         / current_price
         * 100
     )
 
     active = active[
-        active["distance_pct"] <= WALL_RANGE_PCT
+        active["distance_pct"]
+        <= WALL_RANGE_PCT
     ]
 
-    calls = active[active["option_type"] == "CALL"]
-    puts = active[active["option_type"] == "PUT"]
+    if active.empty:
+        return empty
+
+    calls = active[
+        active["option_type"] == "CALL"
+    ]
+
+    puts = active[
+        active["option_type"] == "PUT"
+    ]
 
     return {
-        "call_increase": calls[
-            calls["oi_delta"] > 0
-        ].sort_values(
-            ["oi_delta", "volume"],
-            ascending=False
-        ).head(top_n),
 
-        "call_decrease": calls[
-            calls["oi_delta"] < 0
-        ].sort_values(
-            ["oi_delta", "volume"],
-            ascending=True
-        ).head(top_n),
+        "call_increase":
+            calls[
+                calls["oi_delta"] > 0
+            ]
+            .sort_values(
+                [
+                    "oi_delta",
+                    "volume"
+                ],
+                ascending=False
+            )
+            .head(top_n),
 
-        "put_increase": puts[
-            puts["oi_delta"] > 0
-        ].sort_values(
-            ["oi_delta", "volume"],
-            ascending=False
-        ).head(top_n),
+        "call_decrease":
+            calls[
+                calls["oi_delta"] < 0
+            ]
+            .sort_values(
+                [
+                    "oi_delta",
+                    "volume"
+                ],
+                ascending=True
+            )
+            .head(top_n),
 
-        "put_decrease": puts[
-            puts["oi_delta"] < 0
-        ].sort_values(
-            ["oi_delta", "volume"],
-            ascending=True
-        ).head(top_n)
+        "put_increase":
+            puts[
+                puts["oi_delta"] > 0
+            ]
+            .sort_values(
+                [
+                    "oi_delta",
+                    "volume"
+                ],
+                ascending=False
+            )
+            .head(top_n),
+
+        "put_decrease":
+            puts[
+                puts["oi_delta"] < 0
+            ]
+            .sort_values(
+                [
+                    "oi_delta",
+                    "volume"
+                ],
+                ascending=True
+            )
+            .head(top_n)
     }
 
 
-# ============================================================
-# OPTION DATA
-# ============================================================
-
-def get_option_data(ticker):
-
-    t = yf.Ticker(ticker)
-
-    expirations = t.options
-
-    if not expirations:
-
-        raise Exception(
-            "옵션 만기 데이터가 없습니다."
-        )
-
-    today = date.today()
-
-    valid_expirations = []
-
-    for exp in expirations:
-
-        try:
-
-            exp_date = datetime.strptime(
-                exp,
-                "%Y-%m-%d"
-            ).date()
-
-            dte = (
-                exp_date - today
-            ).days
-
-            if 0 <= dte <= MAX_DTE:
-
-                valid_expirations.append(
-                    (exp, dte)
-                )
-
-        except Exception:
-
-            continue
-
-    print(
-        f"📅 전체 만기: "
-        f"{len(expirations)}개"
-    )
-
-    print(
-        f"📅 0~180 DTE 만기: "
-        f"{len(valid_expirations)}개"
-    )
-
-    if not valid_expirations:
-
-        raise Exception(
-            "0~180 DTE 옵션 만기가 없습니다."
-        )
-
-    rows = []
-
-    for exp, dte in valid_expirations:
-
-        print(
-            f"   수집: {exp} | DTE {dte}"
-        )
-
-        try:
-
-            chain = t.option_chain(exp)
-
-            calls = chain.calls.copy()
-            puts = chain.puts.copy()
-
-            calls["option_type"] = "CALL"
-            puts["option_type"] = "PUT"
-
-            calls["expiration"] = exp
-            puts["expiration"] = exp
-
-            calls["DTE"] = dte
-            puts["DTE"] = dte
-
-            rows.append(calls)
-            rows.append(puts)
-
-        except Exception as e:
-
-            print(
-                f"⚠️ {exp} 오류: {e}"
-            )
-
-    if not rows:
-
-        raise Exception(
-            "옵션 데이터를 가져오지 못했습니다."
-        )
-
-    return pd.concat(
-        rows,
-        ignore_index=True
-    )
 
 
 # ============================================================
