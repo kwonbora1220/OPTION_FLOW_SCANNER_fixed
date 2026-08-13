@@ -2,6 +2,7 @@ import os
 import sys
 import time
 import math
+import re
 import requests
 import yfinance as yf
 import pandas as pd
