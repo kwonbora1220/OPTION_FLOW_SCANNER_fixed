@@ -7,7 +7,7 @@ SELECTED_SYMBOLS = [
     "MU",
     "CVS",
     "AMD",
-    "MSFT",
+    "MSFT",
     "PLTR",
     "CRWV",
     "APP",
