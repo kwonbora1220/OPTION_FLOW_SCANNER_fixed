@@ -808,6 +808,12 @@ def normalize(
 
 # ============================================================
 # FILTER
+#
+# IMPORTANT:
+# DTE 0 EXCLUDED
+#
+# INCLUDED:
+# DTE 1 ~ MAX_DTE
 # ============================================================
 
 def apply_filters(
@@ -826,6 +832,12 @@ def apply_filters(
 
     # --------------------------------------------------------
     # DTE
+    #
+    # DTE 0 = TODAY EXPIRATION
+    # DTE 0 IS EXCLUDED
+    #
+    # Final:
+    # DTE 1 ~ max_dte
     # --------------------------------------------------------
 
     data = data[
@@ -834,7 +846,7 @@ def apply_filters(
 
     data = data[
         (
-            data["DTE"] >= 0
+            data["DTE"] > 0
         )
         &
         (
@@ -843,7 +855,7 @@ def apply_filters(
     ].copy()
 
     print(
-        f"After DTE 0~{max_dte}: "
+        f"After DTE 1~{max_dte}: "
         f"{len(data):,}"
     )
 
@@ -956,6 +968,9 @@ def calculate_metrics(
 
 # ============================================================
 # TODAY EXPIRATION
+#
+# Since DTE 0 is already removed,
+# this should normally be EMPTY.
 # ============================================================
 
 def get_today_expiration(
@@ -1328,6 +1343,9 @@ def find_wall(
 
 # ============================================================
 # TODAY SECTION
+#
+# DTE 0 EXCLUDED
+# Therefore normally N/A
 # ============================================================
 
 def build_today_report(
@@ -1356,7 +1374,7 @@ def build_today_report(
         )
 
         lines.append(
-            "현재 데이터에 오늘 만기 옵션이 없습니다."
+            "0DTE 제외 설정으로 오늘 만기 옵션을 제외했습니다."
         )
 
         return lines
@@ -1708,8 +1726,13 @@ def build_report(
         f"${max_strike:g}"
     )
 
+    # ========================================================
+    # IMPORTANT
+    # DTE 0 EXCLUDED
+    # ========================================================
+
     report.append(
-        f"📅 DTE: 0 ~ {max_dte}"
+        f"📅 DTE: 1 ~ {max_dte}"
     )
 
     report.append(
@@ -2160,6 +2183,10 @@ def build_report(
     )
 
     report.append(
+        "• DTE 0 옵션은 분석에서 제외"
+    )
+
+    report.append(
         "• Premium = 거래대금 Proxy"
     )
 
@@ -2397,27 +2424,27 @@ def save_outputs(
     )
 
     print(
-        f"contracts.csv"
+        "contracts.csv"
     )
 
     print(
-        f"strike_structure.csv"
+        "strike_structure.csv"
     )
 
     print(
-        f"today_expiration.csv"
+        "today_expiration.csv"
     )
 
     print(
-        f"top_contracts.csv"
+        "top_contracts.csv"
     )
 
     print(
-        f"summary.csv"
+        "summary.csv"
     )
 
     print(
-        f"report.md"
+        "report.md"
     )
 
 
@@ -2483,9 +2510,13 @@ def main():
         f"${max_strike:g}"
     )
 
+    # ========================================================
+    # DTE 0 EXCLUDED
+    # ========================================================
+
     print(
         f"DTE RANGE    : "
-        f"0 ~ {max_dte}"
+        f"1 ~ {max_dte}"
     )
 
     print(
@@ -2514,6 +2545,8 @@ def main():
 
     # ========================================================
     # 3 FILTER
+    #
+    # DTE 0 EXCLUDED HERE
     # ========================================================
 
     data = apply_filters(
@@ -2547,6 +2580,8 @@ def main():
 
     # ========================================================
     # 5 TODAY
+    #
+    # DTE 0 already removed
     # ========================================================
 
     today_data = (
@@ -2776,6 +2811,10 @@ def main():
 
                 "max_dte":
                     max_dte,
+
+                # DTE 0 excluded
+                "min_dte":
+                    1,
 
                 "rows":
                     len(data),
