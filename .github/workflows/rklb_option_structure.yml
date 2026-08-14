@@ -1,0 +1,178 @@
+name: RKLB - Option Structure $80-$100
+
+on:
+  workflow_dispatch:
+    inputs:
+      symbol:
+        description: "Ticker"
+        required: true
+        default: "RKLB"
+
+      min_strike:
+        description: "Minimum strike"
+        required: true
+        default: "80"
+
+      max_strike:
+        description: "Maximum strike"
+        required: true
+        default: "100"
+
+      max_dte:
+        description: "Maximum DTE"
+        required: true
+        default: "180"
+
+  schedule:
+    - cron: "30 22 * * 1-5"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rklb-option-structure
+  cancel-in-progress: false
+
+jobs:
+
+  option-structure:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # ============================================================
+      # 1. CHECKOUT
+      # ============================================================
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+
+      # ============================================================
+      # 2. PYTHON
+      # ============================================================
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+
+      # ============================================================
+      # 3. INSTALL
+      # ============================================================
+
+      - name: Install dependencies
+        run: |
+
+          python -m pip install --upgrade pip
+
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          fi
+
+          pip install yfinance pandas numpy
+
+
+      # ============================================================
+      # 4. CONFIG
+      # ============================================================
+
+      - name: Set configuration
+        shell: bash
+        env:
+          INPUT_SYMBOL: ${{ github.event.inputs.symbol }}
+          INPUT_MIN_STRIKE: ${{ github.event.inputs.min_strike }}
+          INPUT_MAX_STRIKE: ${{ github.event.inputs.max_strike }}
+          INPUT_MAX_DTE: ${{ github.event.inputs.max_dte }}
+
+        run: |
+
+          SYMBOL="${INPUT_SYMBOL:-RKLB}"
+          MIN_STRIKE="${INPUT_MIN_STRIKE:-80}"
+          MAX_STRIKE="${INPUT_MAX_STRIKE:-100}"
+          MAX_DTE="${INPUT_MAX_DTE:-180}"
+
+          echo "SYMBOL=$SYMBOL" >> "$GITHUB_ENV"
+          echo "MIN_STRIKE=$MIN_STRIKE" >> "$GITHUB_ENV"
+          echo "MAX_STRIKE=$MAX_STRIKE" >> "$GITHUB_ENV"
+          echo "MAX_DTE=$MAX_DTE" >> "$GITHUB_ENV"
+
+          echo "=========================================="
+          echo "RKLB OPTION STRUCTURE"
+          echo "=========================================="
+          echo "SYMBOL       : $SYMBOL"
+          echo "STRIKE RANGE : $MIN_STRIKE ~ $MAX_STRIKE"
+          echo "MAX DTE      : $MAX_DTE"
+          echo "=========================================="
+
+
+      # ============================================================
+      # 5. RUN INDEPENDENT PYTHON FILE
+      # ============================================================
+
+      - name: Run RKLB option structure scanner
+        env:
+          SYMBOL: ${{ env.SYMBOL }}
+          MIN_STRIKE: ${{ env.MIN_STRIKE }}
+          MAX_STRIKE: ${{ env.MAX_STRIKE }}
+          MAX_DTE: ${{ env.MAX_DTE }}
+
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+
+        run: |
+
+          python rklb_option_structure.py
+
+
+      # ============================================================
+      # 6. VALIDATE
+      # ============================================================
+
+      - name: Validate output
+        shell: bash
+        run: |
+
+          set -e
+
+          test -f rklb_option_structure/report.md
+          test -f rklb_option_structure/summary.csv
+          test -f rklb_option_structure/contracts.csv
+          test -f rklb_option_structure/strike_structure.csv
+          test -f rklb_option_structure/top_contracts.csv
+
+          echo "=========================================="
+          echo "OUTPUT VALIDATION: OK"
+          echo "=========================================="
+
+          echo ""
+          echo "SUMMARY:"
+          cat rklb_option_structure/summary.csv
+
+          echo ""
+          echo "STRIKE STRUCTURE:"
+          cat rklb_option_structure/strike_structure.csv
+
+
+      # ============================================================
+      # 7. DISPLAY REPORT
+      # ============================================================
+
+      - name: Display final report
+        run: |
+
+          cat rklb_option_structure/report.md
+
+
+      # ============================================================
+      # 8. UPLOAD ARTIFACT
+      # ============================================================
+
+      - name: Upload option structure artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.SYMBOL }}-option-structure
+          path: rklb_option_structure/
+          retention-days: 7
