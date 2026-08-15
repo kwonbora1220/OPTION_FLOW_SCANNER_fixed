@@ -2106,4 +2106,933 @@ def build_top_contracts(df):
 
 def build_summary(
     ticker,
-    current_price
+    current_price,
+    df,
+    structure,
+    previous_oi_date
+):
+
+    calls = df[
+        df["option_type"]
+        == "CALL"
+    ]
+
+
+    puts = df[
+        df["option_type"]
+        == "PUT"
+    ]
+
+
+    call_oi = safe_float(
+        calls["openInterest"].sum()
+    )
+
+
+    put_oi = safe_float(
+        puts["openInterest"].sum()
+    )
+
+
+    call_volume = safe_float(
+        calls["volume"].sum()
+    )
+
+
+    put_volume = safe_float(
+        puts["volume"].sum()
+    )
+
+
+    total_oi = (
+        call_oi
+        + put_oi
+    )
+
+
+    total_volume = (
+        call_volume
+        + put_volume
+    )
+
+
+    call_oi_ratio = (
+
+        call_oi
+        / total_oi
+
+        if total_oi > 0
+
+        else 0.5
+    )
+
+
+    call_volume_ratio = (
+
+        call_volume
+        / total_volume
+
+        if total_volume > 0
+
+        else 0.5
+    )
+
+
+    oi_difference = (
+        call_oi
+        - put_oi
+    )
+
+
+    volume_difference = (
+        call_volume
+        - put_volume
+    )
+
+
+    total_oi_delta = 0
+
+
+    call_oi_delta = 0
+
+
+    put_oi_delta = 0
+
+
+    if "oi_delta" in df.columns:
+
+        call_oi_delta = safe_float(
+            calls["oi_delta"].sum()
+        )
+
+
+        put_oi_delta = safe_float(
+            puts["oi_delta"].sum()
+        )
+
+
+        total_oi_delta = (
+            call_oi_delta
+            + put_oi_delta
+        )
+
+
+    max_call_oi = 0
+
+    max_put_oi = 0
+
+    max_call_oi_strike = None
+
+    max_put_oi_strike = None
+
+
+    if not structure.empty:
+
+        call_idx = (
+            structure["call_oi"]
+            .idxmax()
+        )
+
+
+        put_idx = (
+            structure["put_oi"]
+            .idxmax()
+        )
+
+
+        max_call_oi = safe_float(
+            structure.loc[
+                call_idx,
+                "call_oi"
+            ]
+        )
+
+
+        max_put_oi = safe_float(
+            structure.loc[
+                put_idx,
+                "put_oi"
+            ]
+        )
+
+
+        max_call_oi_strike = (
+            safe_float(
+                structure.loc[
+                    call_idx,
+                    "strike"
+                ]
+            )
+        )
+
+
+        max_put_oi_strike = (
+            safe_float(
+                structure.loc[
+                    put_idx,
+                    "strike"
+                ]
+            )
+        )
+
+
+    return {
+
+        "ticker":
+        ticker,
+
+        "current_price":
+        current_price,
+
+        "min_strike":
+        MIN_STRIKE,
+
+        "max_strike":
+        MAX_STRIKE,
+
+        "max_dte":
+        MAX_DTE,
+
+        "contracts":
+        len(df),
+
+        "strikes":
+        len(structure),
+
+        "call_oi":
+        call_oi,
+
+        "put_oi":
+        put_oi,
+
+        "total_oi":
+        total_oi,
+
+        "call_volume":
+        call_volume,
+
+        "put_volume":
+        put_volume,
+
+        "total_volume":
+        total_volume,
+
+        "call_oi_ratio":
+        call_oi_ratio,
+
+        "call_volume_ratio":
+        call_volume_ratio,
+
+        "oi_difference":
+        oi_difference,
+
+        "volume_difference":
+        volume_difference,
+
+        "call_oi_delta":
+        call_oi_delta,
+
+        "put_oi_delta":
+        put_oi_delta,
+
+        "total_oi_delta":
+        total_oi_delta,
+
+        "max_call_oi":
+        max_call_oi,
+
+        "max_call_oi_strike":
+        max_call_oi_strike,
+
+        "max_put_oi":
+        max_put_oi,
+
+        "max_put_oi_strike":
+        max_put_oi_strike,
+
+        "previous_oi_date":
+        (
+            previous_oi_date.isoformat()
+            if previous_oi_date
+            else ""
+        )
+    }
+
+
+# ============================================================
+# REPORT
+# ============================================================
+
+def build_report(
+    summary,
+    structure,
+    top_contracts
+):
+
+    ticker = summary["ticker"]
+
+    current_price = (
+        summary["current_price"]
+    )
+
+
+    lines = []
+
+
+    lines.append(
+        "━━━━━━━━━━━━━━━━━━━━━━━━"
+    )
+
+
+    lines.append(
+        f"🔥 {ticker} OPTION STRUCTURE"
+    )
+
+
+    lines.append(
+        "━━━━━━━━━━━━━━━━━━━━━━━━"
+    )
+
+
+    lines.append("")
+
+
+    lines.append(
+        f"💰 현재가: "
+        f"${current_price:.2f}"
+    )
+
+
+    lines.append(
+        f"🎯 Strike Range: "
+        f"${MIN_STRIKE:g}"
+        f" ~ "
+        f"${MAX_STRIKE:g}"
+    )
+
+
+    lines.append(
+        f"📅 DTE: "
+        f"0 ~ {MAX_DTE}"
+    )
+
+
+    lines.append(
+        f"📊 옵션 계약: "
+        f"{summary['contracts']:,}"
+    )
+
+
+    lines.append(
+        f"🎯 Strike 수: "
+        f"{summary['strikes']:,}"
+    )
+
+
+    if summary[
+        "previous_oi_date"
+    ]:
+
+        lines.append(
+            f"📈 OI 비교: "
+            f"{summary['previous_oi_date']}"
+        )
+
+    else:
+
+        lines.append(
+            "📈 OI 비교: "
+            "이전 snapshot 없음"
+        )
+
+
+    lines.append("")
+
+
+    # ========================================================
+    # OI SUMMARY
+    # ========================================================
+
+    lines.append(
+        "━━━━━━━━━━━━━━━━━━━━━━━━"
+    )
+
+
+    lines.append(
+        "🟢 OI SUMMARY"
+    )
+
+
+    lines.append(
+        "━━━━━━━━━━━━━━━━━━━━━━━━"
+    )
+
+
+    lines.append(
+        f"CALL OI: "
+        f"{summary['call_oi']:,.0f}"
+    )
+
+
+    lines.append(
+        f"PUT OI: "
+        f"{summary['put_oi']:,.0f}"
+    )
+
+
+    lines.append(
+        f"TOTAL OI: "
+        f"{summary['total_oi']:,.0f}"
+    )
+
+
+    lines.append(
+        f"CALL OI Ratio: "
+        f"{summary['call_oi_ratio'] * 100:.1f}%"
+    )
+
+
+    lines.append(
+        f"CALL OI Δ: "
+        f"{summary['call_oi_delta']:+,.0f}"
+    )
+
+
+    lines.append(
+        f"PUT OI Δ: "
+        f"{summary['put_oi_delta']:+,.0f}"
+    )
+
+
+    lines.append(
+        f"TOTAL OI Δ: "
+        f"{summary['total_oi_delta']:+,.0f}"
+    )
+
+
+    lines.append("")
+
+
+    # ========================================================
+    # VOLUME SUMMARY
+    # ========================================================
+
+    lines.append(
+        "━━━━━━━━━━━━━━━━━━━━━━━━"
+    )
+
+
+    lines.append(
+        "🔥 VOLUME SUMMARY"
+    )
+
+
+    lines.append(
+        "━━━━━━━━━━━━━━━━━━━━━━━━"
+    )
+
+
+    lines.append(
+        f"CALL Volume: "
+        f"{summary['call_volume']:,.0f}"
+    )
+
+
+    lines.append(
+        f"PUT Volume: "
+        f"{summary['put_volume']:,.0f}"
+    )
+
+
+    lines.append(
+        f"TOTAL Volume: "
+        f"{summary['total_volume']:,.0f}"
+    )
+
+
+    lines.append(
+        f"CALL Volume Ratio: "
+        f"{summary['call_volume_ratio'] * 100:.1f}%"
+    )
+
+
+    lines.append("")
+
+
+    # ========================================================
+    # BAR STRUCTURE
+    # ========================================================
+
+    bar_report = build_oi_bar_report(
+        structure,
+        current_price
+    )
+
+
+    lines.append(
+        bar_report
+    )
+
+
+    lines.append("")
+
+
+    volume_report = (
+        build_volume_bar_report(
+            structure,
+            current_price
+        )
+    )
+
+
+    lines.append(
+        volume_report
+    )
+
+
+    lines.append("")
+
+
+    # ========================================================
+    # MAX OI
+    # ========================================================
+
+    lines.append(
+        "━━━━━━━━━━━━━━━━━━━━━━━━"
+    )
+
+
+    lines.append(
+        "🏆 MAX OI"
+    )
+
+
+    lines.append(
+        "━━━━━━━━━━━━━━━━━━━━━━━━"
+    )
+
+
+    if (
+        summary["max_call_oi_strike"]
+        is not None
+    ):
+
+        lines.append(
+            f"🟩 CALL "
+            f"${summary['max_call_oi_strike']:g}"
+            f" | OI "
+            f"{summary['max_call_oi']:,.0f}"
+        )
+
+
+    if (
+        summary["max_put_oi_strike"]
+        is not None
+    ):
+
+        lines.append(
+            f"🟥 PUT "
+            f"${summary['max_put_oi_strike']:g}"
+            f" | OI "
+            f"{summary['max_put_oi']:,.0f}"
+        )
+
+
+    lines.append("")
+
+
+    # ========================================================
+    # TOP CONTRACTS
+    # ========================================================
+
+    lines.append(
+        "━━━━━━━━━━━━━━━━━━━━━━━━"
+    )
+
+
+    lines.append(
+        "🔥 TOP CONTRACTS"
+    )
+
+
+    lines.append(
+        "━━━━━━━━━━━━━━━━━━━━━━━━"
+    )
+
+
+    if top_contracts.empty:
+
+        lines.append(
+            "없음"
+        )
+
+    else:
+
+        for _, row in (
+            top_contracts.head(10)
+            .iterrows()
+        ):
+
+            option_type = (
+                row["option_type"]
+            )
+
+
+            icon = (
+                "🟩"
+                if option_type == "CALL"
+                else "🟥"
+            )
+
+
+            premium = safe_float(
+                row.get(
+                    "premium_proxy",
+                    0
+                )
+            )
+
+
+            lines.append(
+                f"{icon} "
+                f"${safe_float(row['strike']):g}"
+                f" | "
+                f"{row['expiration']}"
+                f" | "
+                f"DTE {safe_int(row['DTE'])}"
+                f" | Vol "
+                f"{safe_int(row['volume']):,}"
+                f" | OI "
+                f"{safe_int(row['openInterest']):,}"
+                f" | "
+                f"{format_money(premium)}"
+            )
+
+
+    lines.append("")
+
+
+    # ========================================================
+    # DATA NOTE
+    # ========================================================
+
+    lines.append(
+        "━━━━━━━━━━━━━━━━━━━━━━━━"
+    )
+
+
+    lines.append(
+        "⚠️ DATA NOTE"
+    )
+
+
+    lines.append(
+        "━━━━━━━━━━━━━━━━━━━━━━━━"
+    )
+
+
+    lines.append(
+        "• Yahoo Finance 무료 옵션 데이터 기반"
+    )
+
+
+    lines.append(
+        "• OI는 실제 Long/Short 방향을 의미하지 않음"
+    )
+
+
+    lines.append(
+        "• Volume은 실제 Buy/Sell 방향이 아님"
+    )
+
+
+    lines.append(
+        "• OI Δ는 snapshot 간 차이"
+    )
+
+
+    lines.append(
+        "• BAR는 CALL/PUT 상대 크기 시각화"
+    )
+
+
+    lines.append(
+        "━━━━━━━━━━━━━━━━━━━━━━━━"
+    )
+
+
+    return "\n".join(lines)
+
+
+# ============================================================
+# SAVE FILES
+# ============================================================
+
+def save_outputs(
+    ticker,
+    df,
+    structure,
+    summary,
+    top_contracts,
+    report
+):
+
+    # --------------------------------------------------------
+    # report.md
+    # --------------------------------------------------------
+
+    report_path = os.path.join(
+        OUTPUT_DIR,
+        "report.md"
+    )
+
+
+    with open(
+        report_path,
+        "w",
+        encoding="utf-8"
+    ) as f:
+
+        f.write(
+            report
+        )
+
+
+    # --------------------------------------------------------
+    # summary.csv
+    # --------------------------------------------------------
+
+    summary_path = os.path.join(
+        OUTPUT_DIR,
+        "summary.csv"
+    )
+
+
+    pd.DataFrame(
+        [summary]
+    ).to_csv(
+        summary_path,
+        index=False,
+        encoding="utf-8-sig"
+    )
+
+
+    # --------------------------------------------------------
+    # contracts.csv
+    # --------------------------------------------------------
+
+    contracts_path = os.path.join(
+        OUTPUT_DIR,
+        "contracts.csv"
+    )
+
+
+    df.to_csv(
+        contracts_path,
+        index=False,
+        encoding="utf-8-sig"
+    )
+
+
+    # --------------------------------------------------------
+    # strike_structure.csv
+    # --------------------------------------------------------
+
+    structure_path = os.path.join(
+        OUTPUT_DIR,
+        "strike_structure.csv"
+    )
+
+
+    structure.to_csv(
+        structure_path,
+        index=False,
+        encoding="utf-8-sig"
+    )
+
+
+    # --------------------------------------------------------
+    # top_contracts.csv
+    # --------------------------------------------------------
+
+    top_path = os.path.join(
+        OUTPUT_DIR,
+        "top_contracts.csv"
+    )
+
+
+    top_contracts.to_csv(
+        top_path,
+        index=False,
+        encoding="utf-8-sig"
+    )
+
+
+    print("")
+    print(
+        "💾 OUTPUT"
+    )
+
+
+    print(
+        f"   {report_path}"
+    )
+
+
+    print(
+        f"   {summary_path}"
+    )
+
+
+    print(
+        f"   {contracts_path}"
+    )
+
+
+    print(
+        f"   {structure_path}"
+    )
+
+
+    print(
+        f"   {top_path}"
+    )
+
+
+    return {
+
+        "report":
+        report_path,
+
+        "summary":
+        summary_path,
+
+        "contracts":
+        contracts_path,
+
+        "structure":
+        structure_path,
+
+        "top":
+        top_path
+    }
+
+
+# ============================================================
+# MAIN ANALYSIS
+# ============================================================
+
+def analyze():
+
+    ticker = SYMBOL
+
+
+    print("")
+    print(
+        "=" * 70
+    )
+
+
+    print(
+        f"🔥 {ticker} OPTION STRUCTURE"
+    )
+
+
+    print(
+        "=" * 70
+    )
+
+
+    print(
+        f"🎯 Strike: "
+        f"${MIN_STRIKE:g}"
+        f" ~ "
+        f"${MAX_STRIKE:g}"
+    )
+
+
+    print(
+        f"📅 DTE: "
+        f"0 ~ {MAX_DTE}"
+    )
+
+
+    print(
+        "=" * 70
+    )
+
+
+    # ========================================================
+    # PRICE
+    # ========================================================
+
+    price_context = (
+        get_market_price(
+            ticker
+        )
+    )
+
+
+    if price_context is None:
+
+        raise RuntimeError(
+            "가격 조회 실패"
+        )
+
+
+    current_price = (
+        price_context[
+            "regular_close"
+        ]
+    )
+
+
+    # ========================================================
+    # OPTIONS
+    # ========================================================
+
+    print("")
+    print(
+        "📡 옵션 데이터 수집"
+    )
+
+
+    df = collect_options(
+        ticker
+    )
+
+
+    df = normalize_options(
+        df
+    )
+
+
+    # ========================================================
+    # STRIKE FILTER
+    # ========================================================
+
+    df = filter_strike_range(
+        df
+    )
+
+
+    if df.empty:
+
+        raise RuntimeError(
+            "설정된 Strike / DTE 범위에 "
+            "옵션 데이터가 없습니다."
+        )
+
+
+    # ========================================================
+    # OI DELTA
+    # ========================================================
+
+    print("")
+    print(
+        "📈 OI Delta 계산"
+    )
+
+
+    df, previous_oi_date = (
+       
