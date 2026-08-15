@@ -73,7 +73,6 @@ FOCUS_STRIKES = [
 # ============================================================
 
 BAR_WIDTH = 10
-
 BAR_MIN_WIDTH = 1
 
 
@@ -101,7 +100,6 @@ US_EASTERN = ZoneInfo(
 # ============================================================
 
 def market_today():
-
     return datetime.now(
         US_EASTERN
     ).date()
@@ -112,24 +110,19 @@ def market_today():
 # ============================================================
 
 def safe_float(value):
-
     try:
-
         value = float(value)
 
         if np.isfinite(value):
-
             return value
 
     except Exception:
-
         pass
 
     return np.nan
 
 
 def numeric(series):
-
     return pd.to_numeric(
         series,
         errors="coerce"
@@ -137,13 +130,9 @@ def numeric(series):
 
 
 def fmt_money(value):
-
-    value = safe_float(
-        value
-    )
+    value = safe_float(value)
 
     if not np.isfinite(value):
-
         return "N/A"
 
     sign = (
@@ -155,21 +144,18 @@ def fmt_money(value):
     value = abs(value)
 
     if value >= 1_000_000_000:
-
         return (
             f"{sign}"
             f"${value / 1_000_000_000:.2f}B"
         )
 
     if value >= 1_000_000:
-
         return (
             f"{sign}"
             f"${value / 1_000_000:.2f}M"
         )
 
     if value >= 1_000:
-
         return (
             f"{sign}"
             f"${value / 1_000:.1f}K"
@@ -182,43 +168,30 @@ def fmt_money(value):
 
 
 def fmt_number(value):
-
-    value = safe_float(
-        value
-    )
+    value = safe_float(value)
 
     if not np.isfinite(value):
-
         return "N/A"
 
     return f"{value:,.0f}"
 
 
 def fmt_pct(value):
-
-    value = safe_float(
-        value
-    )
+    value = safe_float(value)
 
     if not np.isfinite(value):
-
         return "N/A"
 
     return f"{value:.1f}%"
 
 
 def fmt_iv(value):
-
-    value = safe_float(
-        value
-    )
+    value = safe_float(value)
 
     if not np.isfinite(value):
-
         return "N/A"
 
     if value < 2:
-
         value *= 100
 
     return f"{value:.1f}%"
@@ -251,43 +224,35 @@ def make_dynamic_dual_bar(
         not np.isfinite(call_value)
         or call_value < 0
     ):
-
         call_value = 0.0
 
     if (
         not np.isfinite(put_value)
         or put_value < 0
     ):
-
         put_value = 0.0
 
     if (
         not np.isfinite(reference_total)
         or reference_total <= 0
     ):
-
         reference_total = 0.0
 
     total = (
         call_value
-        +
-        put_value
+        + put_value
     )
 
     if total <= 0:
-
         return "·"
 
     if reference_total > 0:
-
         scale_ratio = (
             total
             /
             reference_total
         )
-
     else:
-
         scale_ratio = 1.0
 
     scale_ratio = max(
@@ -307,7 +272,6 @@ def make_dynamic_dual_bar(
     )
 
     if bar_length < BAR_MIN_WIDTH:
-
         bar_length = BAR_MIN_WIDTH
 
     bar_length = min(
@@ -341,9 +305,7 @@ def make_dynamic_dual_bar(
     ):
 
         if call_width <= 0:
-
             call_width = 1
-
             put_width = (
                 bar_length
                 -
@@ -351,9 +313,7 @@ def make_dynamic_dual_bar(
             )
 
         elif put_width <= 0:
-
             put_width = 1
-
             call_width = (
                 bar_length
                 -
@@ -407,14 +367,12 @@ def make_dual_bar(
         not np.isfinite(call_value)
         or call_value < 0
     ):
-
         call_value = 0.0
 
     if (
         not np.isfinite(put_value)
         or put_value < 0
     ):
-
         put_value = 0.0
 
     total = (
@@ -460,13 +418,11 @@ def make_dual_bar_line(
     if not np.isfinite(
         call_value
     ):
-
         call_value = 0
 
     if not np.isfinite(
         put_value
     ):
-
         put_value = 0
 
     return (
@@ -695,7 +651,6 @@ def calculate_premium(
         not np.isfinite(volume)
         or volume <= 0
     ):
-
         return 0.0
 
     if (
@@ -760,7 +715,6 @@ def calculate_gex(
         or not np.isfinite(open_interest)
         or not np.isfinite(spot)
     ):
-
         return np.nan
 
     if (
@@ -768,7 +722,6 @@ def calculate_gex(
         or open_interest <= 0
         or spot <= 0
     ):
-
         return 0.0
 
     gex = (
@@ -786,7 +739,6 @@ def calculate_gex(
     )
 
     if option_type == "PUT":
-
         gex *= -1
 
     return gex
@@ -1229,19 +1181,35 @@ def build_strike_table(
 
         rows.append(
             {
-                "strike": strike,
+                "strike":
+                    strike,
 
-                "call_volume": cv,
-                "put_volume": pv,
-                "total_volume": tv,
+                "call_volume":
+                    cv,
 
-                "call_oi": coi,
-                "put_oi": poi,
-                "total_oi": toi,
+                "put_volume":
+                    pv,
 
-                "call_premium": cp,
-                "put_premium": pp,
-                "total_premium": tp,
+                "total_volume":
+                    tv,
+
+                "call_oi":
+                    coi,
+
+                "put_oi":
+                    poi,
+
+                "total_oi":
+                    toi,
+
+                "call_premium":
+                    cp,
+
+                "put_premium":
+                    pp,
+
+                "total_premium":
+                    tp,
 
                 "call_volume_oi":
                     cv / coi
@@ -1268,8 +1236,11 @@ def build_strike_table(
                     if tp > 0
                     else np.nan,
 
-                "call_gex": cg,
-                "put_gex": pg,
+                "call_gex":
+                    cg,
+
+                "put_gex":
+                    pg,
 
                 "net_gex":
                     cg + pg
@@ -1293,7 +1264,6 @@ def build_bar_structure(
 ):
 
     if strike_table.empty:
-
         return []
 
     lines = []
@@ -1317,8 +1287,7 @@ def build_bar_structure(
             sorted_table[
                 "put_oi"
             ].fillna(0)
-        )
-        .max()
+        ).max()
     )
 
     volume_reference = (
@@ -1330,8 +1299,7 @@ def build_bar_structure(
             sorted_table[
                 "put_volume"
             ].fillna(0)
-        )
-        .max()
+        ).max()
     )
 
     premium_reference = (
@@ -1343,8 +1311,7 @@ def build_bar_structure(
             sorted_table[
                 "put_premium"
             ].fillna(0)
-        )
-        .max()
+        ).max()
     )
 
     lines.append(
@@ -1378,8 +1345,7 @@ def build_bar_structure(
     lines.append("")
 
     for _, row in (
-        sorted_table
-        .iterrows()
+        sorted_table.iterrows()
     ):
 
         strike = row[
@@ -1413,8 +1379,7 @@ def build_bar_structure(
     lines.append("")
 
     for _, row in (
-        sorted_table
-        .iterrows()
+        sorted_table.iterrows()
     ):
 
         strike = row[
@@ -1448,8 +1413,7 @@ def build_bar_structure(
     lines.append("")
 
     for _, row in (
-        sorted_table
-        .iterrows()
+        sorted_table.iterrows()
     ):
 
         strike = row[
@@ -1467,13 +1431,11 @@ def build_bar_structure(
         if not np.isfinite(
             call_premium
         ):
-
             call_premium = 0
 
         if not np.isfinite(
             put_premium
         ):
-
             put_premium = 0
 
         bar = make_dynamic_dual_bar(
@@ -1685,7 +1647,6 @@ def build_strike_expiration_structure(
         ]
 
         if strike_data.empty:
-
             continue
 
         for expiration, frame in (
@@ -1789,7 +1750,6 @@ def build_strike_expiration_structure(
     )
 
     if result.empty:
-
         return result
 
     for strike in (
@@ -1839,6 +1799,13 @@ def build_strike_expiration_structure(
                 100
             )
 
+        else:
+
+            result.loc[
+                mask,
+                "total_oi_pct"
+            ] = np.nan
+
         if call_oi > 0:
 
             result.loc[
@@ -1855,6 +1822,13 @@ def build_strike_expiration_structure(
                 100
             )
 
+        else:
+
+            result.loc[
+                mask,
+                "call_oi_pct"
+            ] = np.nan
+
         if put_oi > 0:
 
             result.loc[
@@ -1870,6 +1844,13 @@ def build_strike_expiration_structure(
                 *
                 100
             )
+
+        else:
+
+            result.loc[
+                mask,
+                "put_oi_pct"
+            ] = np.nan
 
     return (
         result
@@ -1898,7 +1879,6 @@ def build_key_strike_summary(
 ):
 
     if strike_expiration.empty:
-
         return pd.DataFrame()
 
     rows = []
@@ -1962,9 +1942,10 @@ def build_key_strike_summary(
                     ],
 
                 "top_expiration_oi_pct":
-                    top[
-                        "total_oi_pct"
-                    ]
+                    top.get(
+                        "total_oi_pct",
+                        np.nan
+                    )
             }
         )
 
@@ -1992,6 +1973,7 @@ def build_top_contracts(
     result = data.copy()
 
     result["importance"] = (
+
         np.log1p(
             result[
                 "premium_proxy"
@@ -2001,7 +1983,9 @@ def build_top_contracts(
                 lower=0
             )
         )
+
         +
+
         np.log1p(
             result[
                 "volume"
@@ -2011,7 +1995,9 @@ def build_top_contracts(
                 lower=0
             )
         )
+
         +
+
         np.log1p(
             result[
                 "openInterest"
@@ -2021,7 +2007,9 @@ def build_top_contracts(
                 lower=0
             )
         )
+
         +
+
         np.log1p(
             result[
                 "gex"
@@ -2055,7 +2043,6 @@ def find_wall(
 ):
 
     if strike_table.empty:
-
         return None
 
     if option_type == "CALL":
@@ -2115,7 +2102,6 @@ def find_wall(
         )
 
     if candidates.empty:
-
         return None
 
     candidates["distance"] = (
@@ -2139,10 +2125,10 @@ def find_wall(
     ].copy()
 
     if candidates.empty:
-
         return None
 
     candidates["score"] = (
+
         np.log1p(
             candidates[
                 "oi"
@@ -2152,7 +2138,9 @@ def find_wall(
                 lower=0
             )
         )
+
         +
+
         np.log1p(
             candidates[
                 "gex_abs"
@@ -2162,7 +2150,9 @@ def find_wall(
                 lower=0
             )
         )
+
         +
+
         0.25
         *
         np.log1p(
@@ -2689,36 +2679,43 @@ def build_report(
 
             report += [
                 f"💥 ${row['strike']:g}",
+
                 (
                     f"   Total OI: "
                     f"{row['total_oi']:,.0f}"
                 ),
+
                 (
                     f"   CALL OI:  "
                     f"{row['call_oi']:,.0f}"
                 ),
+
                 (
                     f"   PUT OI :  "
                     f"{row['put_oi']:,.0f}"
                 ),
+
                 (
                     f"   🏆 최대 집중: "
                     f"{row['top_expiration']} "
                     f"| DTE "
                     f"{int(dte) if np.isfinite(dte) else 'N/A'}"
                 ),
+
                 (
                     f"   OI: "
                     f"{row['top_expiration_total_oi']:,.0f}"
                     f" | "
                     f"{fmt_pct(row['top_expiration_oi_pct'])}"
                 ),
+
                 (
                     f"   C-OI: "
                     f"{row['top_expiration_call_oi']:,.0f}"
                     f" | P-OI: "
                     f"{row['top_expiration_put_oi']:,.0f}"
                 ),
+
                 ""
             ]
 
@@ -2746,7 +2743,6 @@ def build_report(
             ]
 
             if frame.empty:
-
                 continue
 
             report.append(
@@ -2767,6 +2763,13 @@ def build_report(
                     row["DTE"]
                 )
 
+                total_oi_pct = safe_float(
+                    row.get(
+                        "total_oi_pct",
+                        np.nan
+                    )
+                )
+
                 report.append(
                     f"DTE "
                     f"{int(dte) if np.isfinite(dte) else 'N/A'}"
@@ -2779,7 +2782,7 @@ def build_report(
                     f" | TOTAL "
                     f"{row['total_oi']:,.0f}"
                     f" | "
-                    f"{fmt_pct(row['total_oi_pct'])}"
+                    f"{fmt_pct(total_oi_pct)}"
                 )
 
             report.append("")
@@ -2804,8 +2807,12 @@ def build_report(
             row["DTE"]
         )
 
-        if np.isfinite(
+        volume_oi = safe_float(
             row["volume_oi"]
+        )
+
+        if np.isfinite(
+            volume_oi
         ):
 
             report.append(
@@ -2820,7 +2827,7 @@ def build_report(
                 f" | Premium "
                 f"{fmt_money(row['premium_proxy'])}"
                 f" | V/OI "
-                f"{row['volume_oi']:.2f}"
+                f"{volume_oi:.2f}"
             )
 
         else:
@@ -2946,9 +2953,7 @@ def build_report(
 # TELEGRAM
 # ============================================================
 
-def send_telegram(
-    text
-):
+def send_telegram(text):
 
     token = os.getenv(
         "TELEGRAM_BOT_TOKEN"
@@ -2959,7 +2964,7 @@ def send_telegram(
     )
 
     # ========================================================
-    # CREDENTIALS REQUIRED
+    # CREDENTIAL CHECK
     # ========================================================
 
     if not token or not chat_id:
@@ -2973,6 +2978,10 @@ def send_telegram(
         f"bot{token}/sendMessage"
     )
 
+    # ========================================================
+    # TELEGRAM SAFE MESSAGE LENGTH
+    # ========================================================
+
     max_length = 3900
 
     chunks = []
@@ -2980,7 +2989,7 @@ def send_telegram(
     remaining = text
 
     # ========================================================
-    # MESSAGE CHUNKING
+    # SPLIT MESSAGE
     # ========================================================
 
     while len(remaining) > max_length:
@@ -2992,7 +3001,6 @@ def send_telegram(
         )
 
         if split_at <= 0:
-
             split_at = max_length
 
         chunks.append(
@@ -3004,7 +3012,6 @@ def send_telegram(
         ]
 
     if remaining:
-
         chunks.append(
             remaining
         )
@@ -3015,12 +3022,27 @@ def send_telegram(
             "Telegram message is empty."
         )
 
+    print()
+
     print(
-        f"Telegram chunks: {len(chunks)}"
+        f"Telegram chunks: "
+        f"{len(chunks)}"
     )
 
     # ========================================================
-    # SEND
+    # RETRY CONFIG
+    # ========================================================
+
+    MAX_RETRIES = 3
+
+    RETRY_DELAYS = [
+        5,
+        15,
+        30
+    ]
+
+    # ========================================================
+    # SEND CHUNKS
     # ========================================================
 
     for index, chunk in enumerate(
@@ -3028,89 +3050,177 @@ def send_telegram(
         start=1
     ):
 
-        payload = (
-            urllib.parse.urlencode(
-                {
-                    "chat_id": chat_id,
-                    "text": chunk
-                }
-            )
-            .encode(
-                "utf-8"
-            )
-        )
+        delivered = False
 
-        request = urllib.request.Request(
-            url,
-            data=payload,
-            method="POST"
-        )
+        last_error = None
 
-        try:
+        # ====================================================
+        # RETRY LOOP
+        # ====================================================
 
-            with urllib.request.urlopen(
-                request,
-                timeout=30
-            ) as response:
-
-                raw_response = (
-                    response
-                    .read()
-                    .decode(
-                        "utf-8"
-                    )
-                )
-
-            try:
-
-                result = json.loads(
-                    raw_response
-                )
-
-            except Exception:
-
-                result = {}
-
-            # =================================================
-            # TELEGRAM API FAILURE
-            # =================================================
-
-            if not result.get(
-                "ok",
-                False
-            ):
-
-                raise RuntimeError(
-                    "Telegram API returned "
-                    f"failure: "
-                    f"{raw_response[:500]}"
-                )
+        for attempt in range(
+            1,
+            MAX_RETRIES + 1
+        ):
 
             print(
                 f"Telegram chunk "
-                f"{index}/{len(chunks)}: OK"
+                f"{index}/{len(chunks)} "
+                f"- attempt "
+                f"{attempt}/{MAX_RETRIES}"
             )
 
-        except Exception as exc:
+            payload = (
+                urllib.parse.urlencode(
+                    {
+                        "chat_id":
+                            chat_id,
+
+                        "text":
+                            chunk
+                    }
+                )
+                .encode(
+                    "utf-8"
+                )
+            )
+
+            request = urllib.request.Request(
+                url,
+                data=payload,
+                method="POST"
+            )
+
+            try:
+
+                # ================================================
+                # TELEGRAM REQUEST
+                # ================================================
+
+                with urllib.request.urlopen(
+                    request,
+                    timeout=30
+                ) as response:
+
+                    raw_response = (
+                        response
+                        .read()
+                        .decode(
+                            "utf-8"
+                        )
+                    )
+
+                # ================================================
+                # JSON PARSE
+                # ================================================
+
+                try:
+
+                    result = json.loads(
+                        raw_response
+                    )
+
+                except Exception as exc:
+
+                    raise RuntimeError(
+                        "Invalid Telegram API "
+                        "response."
+                    ) from exc
+
+                # ================================================
+                # TELEGRAM API RESULT
+                # ================================================
+
+                if not result.get(
+                    "ok",
+                    False
+                ):
+
+                    raise RuntimeError(
+                        "Telegram API returned "
+                        "failure: "
+                        f"{raw_response[:500]}"
+                    )
+
+                # ================================================
+                # SUCCESS
+                # ================================================
+
+                print(
+                    f"Telegram chunk "
+                    f"{index}/{len(chunks)}: OK"
+                )
+
+                delivered = True
+
+                break
+
+            # ====================================================
+            # FAILURE
+            # ====================================================
+
+            except Exception as exc:
+
+                last_error = exc
+
+                print()
+
+                print(
+                    f"⚠️ Telegram chunk "
+                    f"{index}/{len(chunks)} "
+                    f"attempt "
+                    f"{attempt} FAILED"
+                )
+
+                print(
+                    f"Error: {repr(exc)}"
+                )
+
+                # ================================================
+                # RETRY
+                # ================================================
+
+                if attempt < MAX_RETRIES:
+
+                    delay = RETRY_DELAYS[
+                        attempt - 1
+                    ]
+
+                    print(
+                        f"🔄 Retrying Telegram "
+                        f"in {delay} seconds..."
+                    )
+
+                    time.sleep(
+                        delay
+                    )
+
+        # ========================================================
+        # FINAL CHUNK FAILURE
+        # ========================================================
+
+        if not delivered:
+
+            print()
 
             print(
                 f"❌ Telegram chunk "
-                f"{index}/{len(chunks)} FAILED"
+                f"{index}/{len(chunks)} "
+                f"FAILED AFTER "
+                f"{MAX_RETRIES} ATTEMPTS"
             )
-
-            print(
-                f"Error: {repr(exc)}"
-            )
-
-            # =================================================
-            # IMPORTANT
-            #
-            # GitHub Actions MUST FAIL
-            # =================================================
 
             raise RuntimeError(
-                "Telegram delivery failed."
-            ) from exc
+                "Telegram delivery failed "
+                f"for chunk "
+                f"{index}/{len(chunks)}."
+            ) from last_error
+
+    # ========================================================
+    # COMPLETE
+    # ========================================================
+
+    print()
 
     print(
         f"✅ Telegram sent successfully: "
@@ -3140,6 +3250,7 @@ def save_outputs(
     )
 
     files = {
+
         "contracts.csv":
             data,
 
@@ -3165,6 +3276,7 @@ def save_outputs(
     saved_files = []
 
     print()
+
     print("=" * 70)
     print("SAVE OUTPUTS")
     print("=" * 70)
@@ -3252,6 +3364,7 @@ def save_outputs(
             )
 
     print()
+
     print(
         "VERIFY SAVED FILES"
     )
@@ -3274,7 +3387,11 @@ def save_outputs(
             else 0
         )
 
-        if exists and size > 0:
+        if (
+            exists
+            and
+            size > 0
+        ):
 
             print(
                 f"✅ "
@@ -3351,10 +3468,13 @@ def main():
     # ========================================================
 
     print()
+
     print("=" * 70)
+
     print(
         "🔥 FULL OPTION STRUCTURE SCANNER"
     )
+
     print("=" * 70)
 
     print(
@@ -3669,6 +3789,7 @@ def main():
     # ========================================================
 
     print()
+
     print(
         report
     )
@@ -3678,8 +3799,13 @@ def main():
     # ========================================================
 
     print()
+
     print("=" * 70)
-    print("TELEGRAM DELIVERY")
+
+    print(
+        "TELEGRAM DELIVERY"
+    )
+
     print("=" * 70)
 
     send_telegram(
@@ -3695,10 +3821,13 @@ def main():
     # ========================================================
 
     print()
+
     print("=" * 70)
+
     print(
         "✅ SCAN COMPLETE"
     )
+
     print("=" * 70)
 
     print(
@@ -3730,10 +3859,13 @@ if __name__ == "__main__":
     except Exception as exc:
 
         print()
+
         print("=" * 70)
+
         print(
             "❌ SCANNER FAILED"
         )
+
         print("=" * 70)
 
         print(
@@ -3745,5 +3877,12 @@ if __name__ == "__main__":
             f"Error: "
             f"{repr(exc)}"
         )
+
+        # ====================================================
+        # IMPORTANT
+        # ====================================================
+        # 예외를 다시 발생시켜 GitHub Actions가
+        # 실패 상태(exit code != 0)로 종료되게 함.
+        # ====================================================
 
         raise
