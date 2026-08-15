@@ -3035,4 +3035,241 @@ def analyze():
 
 
     df, previous_oi_date = (
-       
+        calculate_oi_delta(
+            df,
+            ticker
+        )
+    )
+
+
+    # ========================================================
+    # STRIKE STRUCTURE
+    # ========================================================
+
+    print("")
+    print(
+        "🏗️ Strike 구조 계산"
+    )
+
+
+    structure = (
+        build_strike_structure(
+            df
+        )
+    )
+
+
+    # ========================================================
+    # TOP CONTRACTS
+    # ========================================================
+
+    top_contracts = (
+        build_top_contracts(
+            df
+        )
+    )
+
+
+    # ========================================================
+    # SUMMARY
+    # ========================================================
+
+    summary = build_summary(
+        ticker,
+        current_price,
+        df,
+        structure,
+        previous_oi_date
+    )
+
+
+    # ========================================================
+    # REPORT
+    # ========================================================
+
+    report = build_report(
+        summary,
+        structure,
+        top_contracts
+    )
+
+
+    # ========================================================
+    # DISPLAY
+    # ========================================================
+
+    print("")
+    print(report)
+    print("")
+
+
+    # ========================================================
+    # SAVE
+    # ========================================================
+
+    output_files = save_outputs(
+        ticker,
+        df,
+        structure,
+        summary,
+        top_contracts,
+        report
+    )
+
+
+    # ========================================================
+    # SAVE OI SNAPSHOT
+    # ========================================================
+
+    oi_snapshot_path = (
+        save_oi_snapshot(
+            df,
+            ticker
+        )
+    )
+
+
+    # ========================================================
+    # TELEGRAM
+    # ========================================================
+
+    telegram_ok = send_telegram(
+        report
+    )
+
+
+    # ========================================================
+    # RESULT
+    # ========================================================
+
+    print("")
+    print(
+        "=" * 70
+    )
+
+
+    print(
+        "🔥 OPTION STRUCTURE 완료"
+    )
+
+
+    print(
+        "=" * 70
+    )
+
+
+    print(
+        f"📌 Symbol: "
+        f"{ticker}"
+    )
+
+
+    print(
+        f"📌 Price: "
+        f"${current_price:.2f}"
+    )
+
+
+    print(
+        f"📌 Strike: "
+        f"${MIN_STRIKE:g}"
+        f" ~ "
+        f"${MAX_STRIKE:g}"
+    )
+
+
+    print(
+        f"📌 Contracts: "
+        f"{len(df):,}"
+    )
+
+
+    print(
+        f"📌 Strikes: "
+        f"{len(structure):,}"
+    )
+
+
+    print(
+        f"📌 Previous OI: "
+        f"{previous_oi_date}"
+    )
+
+
+    print(
+        f"📌 Telegram: "
+        f"{'SUCCESS' if telegram_ok else 'SKIPPED/FAILED'}"
+    )
+
+
+    print(
+        "=" * 70
+    )
+
+
+    return {
+
+        "ticker":
+        ticker,
+
+        "current_price":
+        current_price,
+
+        "df":
+        df,
+
+        "structure":
+        structure,
+
+        "summary":
+        summary,
+
+        "report":
+        report,
+
+        "previous_oi_date":
+        previous_oi_date,
+
+        "oi_snapshot":
+        oi_snapshot_path,
+
+        "telegram_ok":
+        telegram_ok,
+
+        "output_files":
+        output_files
+    }
+
+
+# ============================================================
+# ENTRY POINT
+# ============================================================
+
+if __name__ == "__main__":
+
+    try:
+
+        analyze()
+
+        print("")
+        print(
+            "✅ SUCCESS"
+        )
+
+    except Exception as e:
+
+        print("")
+        print(
+            "❌ OPTION STRUCTURE FAILED"
+        )
+
+
+        print(
+            f"❌ {e}"
+        )
+
+
+        traceback.print_exc()
+
+
+        raise
