@@ -1,4 +1,3 @@
-
 import os
 import sys
 import time
@@ -1847,4 +1846,1030 @@ def build_report(
                 report.append("🟢 Volume: CALL 우위")
             elif put_volume > call_volume:
                 report.append("🔴 Volume: PUT 우위")
-else:
+            else:
+                report.append("🟡 Volume: 균형")
+
+            report.append("")
+
+    # ========================================================
+    # PRICE SCENARIO
+    # ========================================================
+
+    report += [
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+        "📈 5. PRICE SCENARIO",
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    ]
+
+    report.extend(
+        build_price_scenario(
+            key_price_structure,
+            spot
+        )
+    )
+
+    report.append("")
+
+    # ========================================================
+    # BAR
+    # ========================================================
+
+    report.extend(
+        build_bar_structure(
+            strike_table
+        )
+    )
+
+    report.append("")
+
+    # ========================================================
+    # WALL / GEX
+    # ========================================================
+
+    report += [
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+        "🧱 WALL / GEX",
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    ]
+
+    if call_wall is not None:
+        report.append(
+            f"📈 Call Wall: "
+            f"${call_wall['strike']:g}"
+            f" | OI {call_wall['call_oi']:,.0f}"
+        )
+    else:
+        report.append("📈 Call Wall: N/A")
+
+    if put_wall is not None:
+        report.append(
+            f"📉 Put Wall: "
+            f"${put_wall['strike']:g}"
+            f" | OI {put_wall['put_oi']:,.0f}"
+        )
+    else:
+        report.append("📉 Put Wall: N/A")
+
+    report += [
+        "",
+        f"CALL GEX Proxy: {fmt_money(tgex)}",
+        f"PUT GEX Proxy : {fmt_money(pgex)}",
+        f"NET GEX Proxy : {fmt_money(net_gex)}",
+        f"ATM IV: {fmt_iv(atm_iv)}",
+        ""
+    ]
+
+    # ========================================================
+    # STRIKE TABLE
+    # ========================================================
+
+    report += [
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+        "🎯 STRIKE STRUCTURE",
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+        "STRIKE | C-VOL | P-VOL | C-OI | P-OI | C-PREM | P-PREM",
+        "────────────────────────────────────────"
+    ]
+
+    if strike_table.empty:
+        report.append("⚠️ STRIKE STRUCTURE DATA 없음")
+    else:
+        for _, row in (
+            strike_table
+            .sort_values("strike")
+            .iterrows()
+        ):
+            report.append(
+                f"${row['strike']:g} | "
+                f"{row['call_volume']:,.0f} | "
+                f"{row['put_volume']:,.0f} | "
+                f"{row['call_oi']:,.0f} | "
+                f"{row['put_oi']:,.0f} | "
+                f"{fmt_money(row['call_premium'])} | "
+                f"{fmt_money(row['put_premium'])}"
+            )
+
+    report.append("")
+
+    # ========================================================
+    # HIGH OI
+    # ========================================================
+
+    report += [
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+        "🔥 HIGH OI STRIKES",
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    ]
+
+    if strike_table.empty:
+        report.append("N/A")
+    else:
+        for _, row in (
+            strike_table
+            .sort_values(
+                "total_oi",
+                ascending=False
+            )
+            .head(10)
+            .iterrows()
+        ):
+            report.append(
+                f"${row['strike']:g}"
+                f" | Total OI {row['total_oi']:,.0f}"
+                f" | C {row['call_oi']:,.0f}"
+                f" / P {row['put_oi']:,.0f}"
+                f" | GEX {fmt_money(row['net_gex'])}"
+            )
+
+    report.append("")
+
+    # ========================================================
+    # EXPIRATION STRUCTURE
+    # ========================================================
+
+    report += [
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+        "📅 EXPIRATION STRUCTURE",
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+        "DTE | EXPIRATION | C-OI | P-OI | TOTAL OI | OI %",
+        "────────────────────────────────────────"
+    ]
+
+    if (
+        expiration_structure is None
+        or expiration_structure.empty
+    ):
+        report.append(
+            "⚠️ 만기 구조 데이터 없음"
+        )
+    else:
+        for _, row in expiration_structure.iterrows():
+            report.append(
+                f"{fmt_dte(row['DTE'])} | "
+                f"{row['expiration']} | "
+                f"{row['call_oi']:,.0f} | "
+                f"{row['put_oi']:,.0f} | "
+                f"{row['total_oi']:,.0f} | "
+                f"{fmt_pct(row['total_oi_concentration_pct'])}"
+            )
+
+    report.append("")
+
+    # ========================================================
+    # KEY STRIKE
+    # ========================================================
+
+    report += [
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+        "🔥 KEY STRIKE × EXPIRATION OI",
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+        "🎯 $80 / $85 / $90 / $95 / $100",
+        ""
+    ]
+
+    if (
+        key_strike_summary is None
+        or key_strike_summary.empty
+    ):
+        report.append(
+            "⚠️ KEY STRIKE DATA 없음"
+        )
+    else:
+        for _, row in key_strike_summary.iterrows():
+            report += [
+                f"💥 ${row['strike']:g}",
+                f"   Total OI: {row['total_oi']:,.0f}",
+                f"   CALL OI:  {row['call_oi']:,.0f}",
+                f"   PUT OI :  {row['put_oi']:,.0f}",
+                (
+                    f"   🏆 최대 집중: "
+                    f"{row['top_expiration']} "
+                    f"| DTE {fmt_dte(row['top_DTE'])}"
+                ),
+                (
+                    f"   OI: "
+                    f"{row['top_expiration_total_oi']:,.0f}"
+                    f" | "
+                    f"{fmt_pct(row['top_expiration_oi_pct'])}"
+                ),
+                (
+                    f"   C-OI: "
+                    f"{row['top_expiration_call_oi']:,.0f}"
+                    f" | P-OI: "
+                    f"{row['top_expiration_put_oi']:,.0f}"
+                ),
+                ""
+            ]
+
+    # ========================================================
+    # DETAILED EXPIRATION
+    # ========================================================
+
+    if (
+        strike_expiration is not None
+        and not strike_expiration.empty
+    ):
+        report += [
+            "📌 상세 만기 분포",
+            ""
+        ]
+
+        for strike in FOCUS_STRIKES:
+            frame = strike_expiration[
+                np.isclose(
+                    strike_expiration["strike"],
+                    strike,
+                    atol=0.001
+                )
+            ]
+
+            if frame.empty:
+                continue
+
+            report.append(
+                f"━━ ${strike:g} ━━"
+            )
+
+            for _, row in (
+                frame
+                .sort_values(
+                    "total_oi",
+                    ascending=False
+                )
+                .head(8)
+                .iterrows()
+            ):
+                report.append(
+                    f"DTE {fmt_dte(row['DTE'])}"
+                    f" | {row['expiration']}"
+                    f" | C-OI {row['call_oi']:,.0f}"
+                    f" | P-OI {row['put_oi']:,.0f}"
+                    f" | TOTAL {row['total_oi']:,.0f}"
+                    f" | {fmt_pct(row.get('total_oi_pct', np.nan))}"
+                )
+
+            report.append("")
+
+    # ========================================================
+    # TOP CONTRACTS
+    # ========================================================
+
+    report += [
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+        "🔥 TOP OPTION CONTRACTS",
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    ]
+
+    if top_contracts.empty:
+        report.append("N/A")
+    else:
+        for _, row in top_contracts.head(20).iterrows():
+            volume_oi = safe_float(
+                row["volume_oi"]
+            )
+
+            line = (
+                f"{row['option_type']:4s} "
+                f"${row['strike']:g}"
+                f" | DTE {fmt_dte(row['DTE'])}"
+                f" | Vol {fmt_number(row['volume'])}"
+                f" | OI {fmt_number(row['openInterest'])}"
+                f" | Premium {fmt_money(row['premium_proxy'])}"
+            )
+
+            if np.isfinite(volume_oi):
+                line += f" | V/OI {volume_oi:.2f}"
+            else:
+                line += " | V/OI N/A"
+
+            report.append(line)
+
+    # ========================================================
+    # FINAL STRUCTURE
+    # ========================================================
+
+    report += [
+        "",
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+        "🧠 FINAL STRUCTURE",
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    ]
+
+    if cv > pv:
+        report.append("🟢 CALL Volume 우세")
+    elif pv > cv:
+        report.append("🔴 PUT Volume 우세")
+    else:
+        report.append("🟡 Volume 균형")
+
+    if coi > poi:
+        report.append("🟢 CALL OI 우세")
+    elif poi > coi:
+        report.append("🔴 PUT OI 우세")
+    else:
+        report.append("🟡 OI 균형")
+
+    if cp > pp:
+        report.append("🟢 CALL Premium 우세")
+    elif pp > cp:
+        report.append("🔴 PUT Premium 우세")
+    else:
+        report.append("🟡 Premium 균형")
+
+    if np.isfinite(net_gex):
+        if net_gex > 0:
+            report.append(
+                "📈 Net GEX Proxy: POSITIVE"
+            )
+        elif net_gex < 0:
+            report.append(
+                "📉 Net GEX Proxy: NEGATIVE"
+            )
+        else:
+            report.append(
+                "🟡 Net GEX Proxy: NEUTRAL"
+            )
+    else:
+        report.append(
+            "⚪ Net GEX Proxy: N/A"
+        )
+
+    # ========================================================
+    # LIMITATIONS
+    # ========================================================
+
+    report += [
+        "",
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+        "⚠️ DATA LIMITATIONS",
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+        "• Yahoo Finance 무료 옵션 데이터",
+        "• Yahoo가 제공하는 전체 만기 수집",
+        "• 분석: 지정 Strike/DTE 범위",
+        "• DTE 0 제외",
+        "• Premium = 거래대금 Proxy",
+        "• 실제 Buy/Sell 방향 확인 불가",
+        "• OI만으로 Long/Short 확정 불가",
+        "• Volume/OI = 당일 Volume ÷ 기존 OI",
+        "• GEX = OI 기반 Proxy",
+        "• Yahoo gamma 부족 시 GEX 정확도 제한",
+        "",
+        f"Generated: {started.strftime('%Y-%m-%d %H:%M:%S UTC')}"
+    ]
+
+    return "\n".join(report)
+
+
+# ============================================================
+# TELEGRAM
+# ============================================================
+
+def split_telegram_text(text, max_length=3900):
+    if not text:
+        return []
+
+    chunks = []
+    remaining = text
+
+    while len(remaining) > max_length:
+        split_at = remaining.rfind(
+            "\n",
+            0,
+            max_length
+        )
+
+        if split_at <= 0:
+            split_at = max_length
+
+        chunks.append(
+            remaining[:split_at]
+        )
+
+        remaining = remaining[
+            split_at:
+        ]
+
+        if remaining.startswith("\n"):
+            remaining = remaining[1:]
+
+    if remaining:
+        chunks.append(remaining)
+
+    return chunks
+
+
+def send_telegram(text):
+    token = os.getenv(
+        "TELEGRAM_BOT_TOKEN"
+    )
+
+    chat_id = os.getenv(
+        "TELEGRAM_CHAT_ID"
+    )
+
+    if not token or not chat_id:
+        raise RuntimeError(
+            "Telegram credentials not configured."
+        )
+
+    url = (
+        "https://api.telegram.org/"
+        f"bot{token}/sendMessage"
+    )
+
+    chunks = split_telegram_text(
+        text,
+        max_length=3900
+    )
+
+    if not chunks:
+        raise RuntimeError(
+            "Telegram message is empty."
+        )
+
+    print()
+    print("=" * 70)
+    print("SEND TELEGRAM")
+    print("=" * 70)
+
+    failed_chunks = []
+
+    for index, chunk in enumerate(
+        chunks,
+        start=1
+    ):
+        payload = urllib.parse.urlencode(
+            {
+                "chat_id": chat_id,
+                "text": chunk
+            }
+        ).encode("utf-8")
+
+        request = urllib.request.Request(
+            url,
+            data=payload,
+            method="POST"
+        )
+
+        try:
+            with urllib.request.urlopen(
+                request,
+                timeout=30
+            ) as response:
+                status = response.status
+
+                result = (
+                    response
+                    .read()
+                    .decode("utf-8")
+                )
+
+            print(
+                f"Telegram {index}/{len(chunks)} "
+                f"HTTP={status}: "
+                f"{result[:200]}"
+            )
+
+            try:
+                result_json = (
+                    __import__("json")
+                    .loads(result)
+                )
+            except Exception:
+                result_json = {}
+
+            if (
+                status < 200
+                or status >= 300
+                or result_json.get("ok") is not True
+            ):
+                failed_chunks.append(index)
+
+        except Exception as exc:
+            print(
+                f"❌ Telegram chunk "
+                f"{index} failed:",
+                repr(exc)
+            )
+
+            failed_chunks.append(index)
+
+    if failed_chunks:
+        raise RuntimeError(
+            "Telegram sending failed. "
+            f"Failed chunks: {failed_chunks}"
+        )
+
+    print(
+        f"✅ Telegram sent successfully: "
+        f"{len(chunks)} message(s)"
+    )
+
+
+# ============================================================
+# SAVE
+# ============================================================
+
+def save_outputs(
+    data,
+    strike_table,
+    expiration_structure,
+    strike_expiration,
+    key_strike_summary,
+    key_price_structure,
+    top_contracts,
+    summary,
+    report,
+    output_dir
+):
+    os.makedirs(
+        output_dir,
+        exist_ok=True
+    )
+
+    files = {
+        "contracts.csv": data,
+        "strike_structure.csv": strike_table,
+        "key_price_structure.csv":
+            key_price_structure,
+        "expiration_structure.csv":
+            expiration_structure,
+        "strike_expiration_structure.csv":
+            strike_expiration,
+        "key_strike_summary.csv":
+            key_strike_summary,
+        "top_contracts.csv":
+            top_contracts,
+        "summary.csv":
+            summary
+    }
+
+    saved_files = []
+
+    print()
+    print("=" * 70)
+    print("SAVE OUTPUTS")
+    print("=" * 70)
+
+    for filename, dataframe in files.items():
+        path = os.path.join(
+            output_dir,
+            filename
+        )
+
+        if dataframe is None:
+            dataframe = pd.DataFrame()
+
+        dataframe.to_csv(
+            path,
+            index=False
+        )
+
+        saved_files.append(path)
+
+        print(
+            f"💾 {filename:40s} "
+            f"rows={len(dataframe):,}"
+        )
+
+    report_path = os.path.join(
+        output_dir,
+        "report.md"
+    )
+
+    with open(
+        report_path,
+        "w",
+        encoding="utf-8"
+    ) as file:
+        file.write(report)
+
+    saved_files.append(report_path)
+
+    manifest_path = os.path.join(
+        output_dir,
+        "save_manifest.txt"
+    )
+
+    with open(
+        manifest_path,
+        "w",
+        encoding="utf-8"
+    ) as file:
+        file.write(
+            "OPTION STRUCTURE SAVE MANIFEST\n"
+        )
+
+        file.write(
+            "========================================\n"
+        )
+
+        file.write(
+            f"Generated UTC: "
+            f"{datetime.now(timezone.utc)}\n"
+        )
+
+        file.write(
+            f"Output Directory: "
+            f"{os.path.abspath(output_dir)}\n\n"
+        )
+
+        for path in saved_files:
+            file.write(
+                f"{os.path.basename(path)}\n"
+            )
+
+    print()
+    print("VERIFY SAVED FILES")
+
+    all_ok = True
+
+    for path in saved_files + [manifest_path]:
+        exists = os.path.isfile(path)
+
+        size = (
+            os.path.getsize(path)
+            if exists
+            else 0
+        )
+
+        if exists and size > 0:
+            print(
+                f"✅ "
+                f"{os.path.basename(path)} "
+                f"({size:,} bytes)"
+            )
+        else:
+            print(
+                f"❌ SAVE FAILED: {path}"
+            )
+            all_ok = False
+
+    if not all_ok:
+        raise RuntimeError(
+            "One or more output files failed to save."
+        )
+
+    print()
+    print("✅ ALL OUTPUT FILES SAVED")
+
+
+# ============================================================
+# SUMMARY
+# ============================================================
+
+def build_summary(
+    data,
+    symbol,
+    spot,
+    min_strike,
+    max_strike,
+    max_dte
+):
+    calls = data[
+        data["option_type"] == "CALL"
+    ]
+
+    puts = data[
+        data["option_type"] == "PUT"
+    ]
+
+    cv = calls["volume"].fillna(0).sum()
+    pv = puts["volume"].fillna(0).sum()
+
+    coi = calls[
+        "openInterest"
+    ].fillna(0).sum()
+
+    poi = puts[
+        "openInterest"
+    ].fillna(0).sum()
+
+    cp = calls[
+        "premium_proxy"
+    ].fillna(0).sum()
+
+    pp = puts[
+        "premium_proxy"
+    ].fillna(0).sum()
+
+    tgex = calls["gex"].sum(
+        min_count=1
+    )
+
+    pgex = puts["gex"].sum(
+        min_count=1
+    )
+
+    if np.isfinite(tgex) and np.isfinite(pgex):
+        net_gex = tgex + pgex
+    elif np.isfinite(tgex):
+        net_gex = tgex
+    elif np.isfinite(pgex):
+        net_gex = pgex
+    else:
+        net_gex = np.nan
+
+    total_volume = cv + pv
+    total_oi = coi + poi
+
+    return pd.DataFrame([{
+        "symbol": symbol,
+        "spot": spot,
+
+        "min_strike": min_strike,
+        "max_strike": max_strike,
+        "max_dte": max_dte,
+
+        "rows": len(data),
+
+        "call_volume": cv,
+        "put_volume": pv,
+
+        "call_oi": coi,
+        "put_oi": poi,
+
+        "call_premium": cp,
+        "put_premium": pp,
+
+        "call_volume_ratio":
+            cv / total_volume * 100
+            if total_volume > 0
+            else np.nan,
+
+        "call_oi_ratio":
+            coi / total_oi * 100
+            if total_oi > 0
+            else np.nan,
+
+        "call_volume_oi":
+            cv / coi
+            if coi > 0
+            else np.nan,
+
+        "put_volume_oi":
+            pv / poi
+            if poi > 0
+            else np.nan,
+
+        "call_gex": tgex,
+        "put_gex": pgex,
+        "net_gex": net_gex
+    }])
+
+
+# ============================================================
+# MAIN
+# ============================================================
+
+def main():
+    args = parse_arguments()
+
+    symbol = (
+        args.symbol
+        .upper()
+        .strip()
+    )
+
+    manual_price = (
+        args.price
+        if args.price
+        else None
+    )
+
+    min_strike = args.min_strike
+    max_strike = args.max_strike
+    max_dte = args.max_dte
+    output_dir = args.output
+
+    if min_strike > max_strike:
+        raise ValueError(
+            "min-strike cannot be greater than max-strike."
+        )
+
+    if max_dte <= 0:
+        raise ValueError(
+            "max-dte must be greater than zero."
+        )
+
+    started = datetime.now(
+        timezone.utc
+    )
+
+    print()
+    print("=" * 70)
+    print("🔥 FULL OPTION STRUCTURE SCANNER")
+    print("=" * 70)
+
+    print(f"SYMBOL       : {symbol}")
+    print(
+        f"ANALYSIS     : "
+        f"${min_strike:g}~${max_strike:g}"
+    )
+    print(
+        f"DTE ANALYSIS : 1~{max_dte}"
+    )
+    print(
+        f"FOCUS        : {FOCUS_STRIKES}"
+    )
+    print(
+        f"BAR WIDTH    : {BAR_WIDTH} MAX"
+    )
+    print(
+        f"OUTPUT       : "
+        f"{os.path.abspath(output_dir)}"
+    )
+
+    print("=" * 70)
+
+    # --------------------------------------------------------
+    # 1. FETCH
+    # --------------------------------------------------------
+
+    raw, spot = fetch_options(
+        symbol,
+        manual_price
+    )
+
+    # --------------------------------------------------------
+    # 2. NORMALIZE
+    # --------------------------------------------------------
+
+    data = normalize(raw)
+
+    # --------------------------------------------------------
+    # 3. FILTER
+    # --------------------------------------------------------
+
+    data = apply_filters(
+        data,
+        min_strike,
+        max_strike,
+        max_dte
+    )
+
+    if data.empty:
+        raise RuntimeError(
+            "No options remain after filtering."
+        )
+
+    # --------------------------------------------------------
+    # 4. METRICS
+    # --------------------------------------------------------
+
+    data = calculate_metrics(
+        data,
+        spot
+    )
+
+    # --------------------------------------------------------
+    # 5. STRUCTURES
+    # --------------------------------------------------------
+
+    strike_table = build_strike_table(
+        data
+    )
+
+    key_price_structure = (
+        build_key_price_structure(
+            data,
+            spot
+        )
+    )
+
+    expiration_structure = (
+        build_expiration_structure(
+            data
+        )
+    )
+
+    strike_expiration = (
+        build_strike_expiration_structure(
+            data,
+            FOCUS_STRIKES
+        )
+    )
+
+    key_strike_summary = (
+        build_key_strike_summary(
+            strike_expiration
+        )
+    )
+
+    top_contracts = (
+        build_top_contracts(data)
+    )
+
+    # --------------------------------------------------------
+    # 6. SUMMARY
+    # --------------------------------------------------------
+
+    summary = build_summary(
+        data=data,
+        symbol=symbol,
+        spot=spot,
+        min_strike=min_strike,
+        max_strike=max_strike,
+        max_dte=max_dte
+    )
+
+    # --------------------------------------------------------
+    # 7. REPORT
+    # --------------------------------------------------------
+
+    report = build_report(
+        data=data,
+        strike_table=strike_table,
+        expiration_structure=expiration_structure,
+        strike_expiration=strike_expiration,
+        key_strike_summary=key_strike_summary,
+        key_price_structure=key_price_structure,
+        top_contracts=top_contracts,
+        spot=spot,
+        symbol=symbol,
+        min_strike=min_strike,
+        max_strike=max_strike,
+        max_dte=max_dte,
+        started=started
+    )
+
+    # --------------------------------------------------------
+    # 8. SAVE
+    # --------------------------------------------------------
+
+    save_outputs(
+        data=data,
+        strike_table=strike_table,
+        expiration_structure=expiration_structure,
+        strike_expiration=strike_expiration,
+        key_strike_summary=key_strike_summary,
+        key_price_structure=key_price_structure,
+        top_contracts=top_contracts,
+        summary=summary,
+        report=report,
+        output_dir=output_dir
+    )
+
+    # --------------------------------------------------------
+    # 9. PRINT
+    # --------------------------------------------------------
+
+    print()
+    print(report)
+
+    # --------------------------------------------------------
+    # 10. TELEGRAM
+    #
+    # 중요:
+    # Telegram 전송 실패 시 RuntimeError를 발생시킨다.
+    # 따라서 GitHub Actions는 FAILED가 된다.
+    # --------------------------------------------------------
+
+    send_telegram(report)
+
+    # --------------------------------------------------------
+    # COMPLETE
+    # --------------------------------------------------------
+
+    print()
+    print("=" * 70)
+    print("✅ SCAN COMPLETE")
+    print("=" * 70)
+
+    print(
+        f"📁 Saved to: "
+        f"{os.path.abspath(output_dir)}"
+    )
+
+
+# ============================================================
+# ENTRY
+# ============================================================
+
+if __name__ == "__main__":
+    try:
+        main()
+
+    except KeyboardInterrupt:
+        print(
+            "Scanner interrupted."
+        )
+        sys.exit(130)
+
+    except Exception as exc:
+        print()
+        print("=" * 70)
+        print("❌ SCANNER FAILED")
+        print("=" * 70)
+
+        print(
+            f"Error type: "
+            f"{type(exc).__name__}"
+        )
+
+        print(
+            f"Error: "
+            f"{repr(exc)}"
+        )
+
+        sys.exit(1)
