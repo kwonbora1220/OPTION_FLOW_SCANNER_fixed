@@ -55,7 +55,7 @@ OUTPUT_DIR = os.getenv(
 
 
 # ============================================================
-# FOCUS STRIKES
+# KEY PRICE LEVELS
 # ============================================================
 
 FOCUS_STRIKES = [
@@ -116,11 +116,9 @@ def safe_float(value):
         value = float(value)
 
         if np.isfinite(value):
-
             return value
 
     except Exception:
-
         pass
 
     return np.nan
@@ -136,57 +134,31 @@ def numeric(series):
 
 def fmt_money(value):
 
-    value = safe_float(
-        value
-    )
+    value = safe_float(value)
 
     if not np.isfinite(value):
-
         return "N/A"
 
-    sign = (
-        "-"
-        if value < 0
-        else ""
-    )
-
+    sign = "-" if value < 0 else ""
     value = abs(value)
 
     if value >= 1_000_000_000:
-
-        return (
-            f"{sign}"
-            f"${value / 1_000_000_000:.2f}B"
-        )
+        return f"{sign}${value / 1_000_000_000:.2f}B"
 
     if value >= 1_000_000:
-
-        return (
-            f"{sign}"
-            f"${value / 1_000_000:.2f}M"
-        )
+        return f"{sign}${value / 1_000_000:.2f}M"
 
     if value >= 1_000:
+        return f"{sign}${value / 1_000:.1f}K"
 
-        return (
-            f"{sign}"
-            f"${value / 1_000:.1f}K"
-        )
-
-    return (
-        f"{sign}"
-        f"${value:,.0f}"
-    )
+    return f"{sign}${value:,.0f}"
 
 
 def fmt_number(value):
 
-    value = safe_float(
-        value
-    )
+    value = safe_float(value)
 
     if not np.isfinite(value):
-
         return "N/A"
 
     return f"{value:,.0f}"
@@ -194,12 +166,9 @@ def fmt_number(value):
 
 def fmt_pct(value):
 
-    value = safe_float(
-        value
-    )
+    value = safe_float(value)
 
     if not np.isfinite(value):
-
         return "N/A"
 
     return f"{value:.1f}%"
@@ -207,40 +176,19 @@ def fmt_pct(value):
 
 def fmt_iv(value):
 
-    value = safe_float(
-        value
-    )
+    value = safe_float(value)
 
     if not np.isfinite(value):
-
         return "N/A"
 
     if value < 2:
-
         value *= 100
 
     return f"{value:.1f}%"
 
 
-def safe_sum(series):
-
-    if series is None:
-
-        return 0.0
-
-    try:
-
-        return safe_float(
-            series.fillna(0).sum()
-        ) or 0.0
-
-    except Exception:
-
-        return 0.0
-
-
 # ============================================================
-# DYNAMIC CALL / PUT BAR
+# DYNAMIC BAR
 # ============================================================
 
 def make_dynamic_dual_bar(
@@ -250,79 +198,50 @@ def make_dynamic_dual_bar(
     max_width=BAR_WIDTH
 ):
 
-    call_value = safe_float(
-        call_value
-    )
-
-    put_value = safe_float(
-        put_value
-    )
-
-    reference_total = safe_float(
-        reference_total
-    )
+    call_value = safe_float(call_value)
+    put_value = safe_float(put_value)
+    reference_total = safe_float(reference_total)
 
     if (
         not np.isfinite(call_value)
         or call_value < 0
     ):
-
         call_value = 0.0
 
     if (
         not np.isfinite(put_value)
         or put_value < 0
     ):
-
         put_value = 0.0
 
     if (
         not np.isfinite(reference_total)
         or reference_total <= 0
     ):
-
         reference_total = 0.0
 
-    total = (
-        call_value
-        +
-        put_value
-    )
+    total = call_value + put_value
 
     if total <= 0:
-
         return "·"
 
     if reference_total > 0:
-
-        scale_ratio = (
-            total
-            /
-            reference_total
-        )
-
+        scale_ratio = total / reference_total
     else:
-
         scale_ratio = 1.0
 
     scale_ratio = max(
         0.0,
-        min(
-            scale_ratio,
-            1.0
-        )
+        min(scale_ratio, 1.0)
     )
 
     bar_length = int(
         round(
-            scale_ratio
-            *
-            max_width
+            scale_ratio * max_width
         )
     )
 
     if bar_length < BAR_MIN_WIDTH:
-
         bar_length = BAR_MIN_WIDTH
 
     bar_length = min(
@@ -331,23 +250,19 @@ def make_dynamic_dual_bar(
     )
 
     call_ratio = (
-        call_value
-        /
-        total
+        call_value / total
+        if total > 0
+        else 0
     )
 
     call_width = int(
         round(
-            call_ratio
-            *
-            bar_length
+            call_ratio * bar_length
         )
     )
 
     put_width = (
-        bar_length
-        -
-        call_width
+        bar_length - call_width
     )
 
     if (
@@ -356,24 +271,12 @@ def make_dynamic_dual_bar(
     ):
 
         if call_width <= 0:
-
             call_width = 1
-
-            put_width = (
-                bar_length
-                -
-                1
-            )
+            put_width = bar_length - 1
 
         elif put_width <= 0:
-
             put_width = 1
-
-            call_width = (
-                bar_length
-                -
-                1
-            )
+            call_width = bar_length - 1
 
     call_width = max(
         0,
@@ -387,9 +290,7 @@ def make_dynamic_dual_bar(
         0,
         min(
             put_width,
-            bar_length
-            -
-            call_width
+            bar_length - call_width
         )
     )
 
@@ -400,55 +301,34 @@ def make_dynamic_dual_bar(
     )
 
 
-# ============================================================
-# BACKWARD COMPATIBILITY
-# ============================================================
-
 def make_dual_bar(
     call_value,
     put_value,
     width=BAR_WIDTH
 ):
 
-    call_value = safe_float(
-        call_value
-    )
-
-    put_value = safe_float(
-        put_value
-    )
+    call_value = safe_float(call_value)
+    put_value = safe_float(put_value)
 
     if (
         not np.isfinite(call_value)
         or call_value < 0
     ):
-
         call_value = 0.0
 
     if (
         not np.isfinite(put_value)
         or put_value < 0
     ):
-
         put_value = 0.0
-
-    total = (
-        call_value
-        +
-        put_value
-    )
 
     return make_dynamic_dual_bar(
         call_value,
         put_value,
-        total,
-        max_width=width
+        call_value + put_value,
+        width
     )
 
-
-# ============================================================
-# BAR LINE
-# ============================================================
 
 def make_dual_bar_line(
     call_value,
@@ -464,31 +344,19 @@ def make_dual_bar_line(
         width
     )
 
-    call_value = safe_float(
-        call_value
-    )
+    call_value = safe_float(call_value)
+    put_value = safe_float(put_value)
 
-    put_value = safe_float(
-        put_value
-    )
-
-    if not np.isfinite(
-        call_value
-    ):
-
+    if not np.isfinite(call_value):
         call_value = 0
 
-    if not np.isfinite(
-        put_value
-    ):
-
+    if not np.isfinite(put_value):
         put_value = 0
 
     return (
         f"{bar} "
         f"C {fmt_number(call_value)} "
-        f"/ "
-        f"P {fmt_number(put_value)}"
+        f"/ P {fmt_number(put_value)}"
     )
 
 
@@ -658,9 +526,7 @@ def get_current_price(
 # DTE
 # ============================================================
 
-def calculate_dte(
-    expiration
-):
+def calculate_dte(expiration):
 
     try:
 
@@ -669,9 +535,7 @@ def calculate_dte(
         ).date()
 
         return (
-            expiry
-            -
-            market_today()
+            expiry - market_today()
         ).days
 
     except Exception:
@@ -690,27 +554,15 @@ def calculate_premium(
     last_price
 ):
 
-    volume = safe_float(
-        volume
-    )
-
-    bid = safe_float(
-        bid
-    )
-
-    ask = safe_float(
-        ask
-    )
-
-    last_price = safe_float(
-        last_price
-    )
+    volume = safe_float(volume)
+    bid = safe_float(bid)
+    ask = safe_float(ask)
+    last_price = safe_float(last_price)
 
     if (
         not np.isfinite(volume)
         or volume <= 0
     ):
-
         return 0.0
 
     if (
@@ -721,11 +573,7 @@ def calculate_premium(
         and ask > 0
     ):
 
-        mid = (
-            bid
-            +
-            ask
-        ) / 2
+        mid = (bid + ask) / 2
 
     elif (
         np.isfinite(last_price)
@@ -738,13 +586,7 @@ def calculate_premium(
 
         return 0.0
 
-    return (
-        volume
-        *
-        mid
-        *
-        100
-    )
+    return volume * mid * 100
 
 
 # ============================================================
@@ -758,24 +600,15 @@ def calculate_gex(
     option_type
 ):
 
-    gamma = safe_float(
-        gamma
-    )
-
-    open_interest = safe_float(
-        open_interest
-    )
-
-    spot = safe_float(
-        spot
-    )
+    gamma = safe_float(gamma)
+    open_interest = safe_float(open_interest)
+    spot = safe_float(spot)
 
     if (
         not np.isfinite(gamma)
         or not np.isfinite(open_interest)
         or not np.isfinite(spot)
     ):
-
         return np.nan
 
     if (
@@ -783,32 +616,25 @@ def calculate_gex(
         or open_interest <= 0
         or spot <= 0
     ):
-
         return 0.0
 
     gex = (
         gamma
-        *
-        open_interest
-        *
-        100
-        *
-        spot
-        *
-        spot
-        *
-        0.01
+        * open_interest
+        * 100
+        * spot
+        * spot
+        * 0.01
     )
 
     if option_type == "PUT":
-
         gex *= -1
 
     return gex
 
 
 # ============================================================
-# FETCH ALL OPTIONS
+# FETCH OPTIONS
 # ============================================================
 
 def fetch_options(
@@ -821,9 +647,7 @@ def fetch_options(
     print("FETCH YAHOO FINANCE FULL OPTION DATA")
     print("=" * 70)
 
-    ticker = yf.Ticker(
-        symbol
-    )
+    ticker = yf.Ticker(symbol)
 
     spot = get_current_price(
         ticker,
@@ -907,44 +731,27 @@ def fetch_options(
 
             frame = calls.copy()
 
-            frame["option_type"] = (
-                "CALL"
-            )
+            frame["option_type"] = "CALL"
+            frame["expiration"] = expiration
 
-            frame["expiration"] = (
-                expiration
-            )
-
-            rows.append(
-                frame
-            )
+            rows.append(frame)
 
         if not puts.empty:
 
             frame = puts.copy()
 
-            frame["option_type"] = (
-                "PUT"
-            )
+            frame["option_type"] = "PUT"
+            frame["expiration"] = expiration
 
-            frame["expiration"] = (
-                expiration
-            )
-
-            rows.append(
-                frame
-            )
+            rows.append(frame)
 
         if (
             not calls.empty
             or not puts.empty
         ):
-
             successful += 1
 
-        time.sleep(
-            0.25
-        )
+        time.sleep(0.25)
 
     if not rows:
 
@@ -963,18 +770,15 @@ def fetch_options(
     print("=" * 70)
 
     print(
-        f"Successful expirations: "
-        f"{successful}"
+        f"Successful expirations: {successful}"
     )
 
     print(
-        f"Failed expirations: "
-        f"{failed}"
+        f"Failed expirations: {failed}"
     )
 
     print(
-        f"RAW ROWS: "
-        f"{len(data):,}"
+        f"RAW ROWS: {len(data):,}"
     )
 
     return data, spot
@@ -984,9 +788,7 @@ def fetch_options(
 # NORMALIZE
 # ============================================================
 
-def normalize(
-    data
-):
+def normalize(data):
 
     data = data.copy()
 
@@ -1017,9 +819,7 @@ def normalize(
 
     data["DTE"] = (
         data["expiration"]
-        .apply(
-            calculate_dte
-        )
+        .apply(calculate_dte)
     )
 
     data = data[
@@ -1028,10 +828,7 @@ def normalize(
 
     data = data[
         data["option_type"].isin(
-            [
-                "CALL",
-                "PUT"
-            ]
+            ["CALL", "PUT"]
         )
     ].copy()
 
@@ -1054,22 +851,16 @@ def apply_filters(
     print("ANALYSIS FILTER")
     print("=" * 70)
 
-    raw_count = len(
-        data
-    )
+    raw_count = len(data)
 
     data = data[
         data["DTE"].notna()
     ].copy()
 
     data = data[
-        (
-            data["DTE"] > 0
-        )
+        (data["DTE"] > 0)
         &
-        (
-            data["DTE"] <= max_dte
-        )
+        (data["DTE"] <= max_dte)
     ].copy()
 
     print(
@@ -1109,50 +900,41 @@ def calculate_metrics(
 
     data = data.copy()
 
-    data["premium_proxy"] = (
-        data.apply(
-            lambda row:
-            calculate_premium(
-                row["volume"],
-                row["bid"],
-                row["ask"],
-                row["lastPrice"]
-            ),
-            axis=1
-        )
+    data["premium_proxy"] = data.apply(
+        lambda row:
+        calculate_premium(
+            row["volume"],
+            row["bid"],
+            row["ask"],
+            row["lastPrice"]
+        ),
+        axis=1
     )
 
-    data["gex"] = (
-        data.apply(
-            lambda row:
-            calculate_gex(
-                row["gamma"],
-                row["openInterest"],
-                spot,
-                row["option_type"]
-            ),
-            axis=1
-        )
+    data["gex"] = data.apply(
+        lambda row:
+        calculate_gex(
+            row["gamma"],
+            row["openInterest"],
+            spot,
+            row["option_type"]
+        ),
+        axis=1
     )
 
     data["volume_oi"] = np.where(
         data["openInterest"] > 0,
         data["volume"]
-        /
-        data["openInterest"],
+        / data["openInterest"],
         np.nan
     )
 
     data["distance_pct"] = (
         (
-            data["strike"]
-            -
-            spot
+            data["strike"] - spot
         )
-        /
-        spot
-        *
-        100
+        / spot
+        * 100
     )
 
     return data
@@ -1162,78 +944,40 @@ def calculate_metrics(
 # STRIKE STRUCTURE
 # ============================================================
 
-def build_strike_table(
-    data
-):
-
-    if data.empty:
-
-        return pd.DataFrame(
-            columns=[
-                "strike",
-                "call_volume",
-                "put_volume",
-                "total_volume",
-                "call_oi",
-                "put_oi",
-                "total_oi",
-                "call_premium",
-                "put_premium",
-                "total_premium",
-                "call_volume_oi",
-                "put_volume_oi",
-                "call_volume_ratio",
-                "call_oi_ratio",
-                "call_premium_ratio",
-                "call_gex",
-                "put_gex",
-                "net_gex"
-            ]
-        )
+def build_strike_table(data):
 
     rows = []
 
-    for strike, frame in (
-        data.groupby(
-            "strike"
-        )
+    for strike, frame in data.groupby(
+        "strike"
     ):
 
         calls = frame[
-            frame["option_type"]
-            ==
-            "CALL"
+            frame["option_type"] == "CALL"
         ]
 
         puts = frame[
-            frame["option_type"]
-            ==
-            "PUT"
+            frame["option_type"] == "PUT"
         ]
 
-        cv = safe_sum(
-            calls["volume"]
-        )
+        cv = calls["volume"].fillna(0).sum()
+        pv = puts["volume"].fillna(0).sum()
 
-        pv = safe_sum(
-            puts["volume"]
-        )
+        coi = calls[
+            "openInterest"
+        ].fillna(0).sum()
 
-        coi = safe_sum(
-            calls["openInterest"]
-        )
+        poi = puts[
+            "openInterest"
+        ].fillna(0).sum()
 
-        poi = safe_sum(
-            puts["openInterest"]
-        )
+        cp = calls[
+            "premium_proxy"
+        ].fillna(0).sum()
 
-        cp = safe_sum(
-            calls["premium_proxy"]
-        )
-
-        pp = safe_sum(
-            puts["premium_proxy"]
-        )
+        pp = puts[
+            "premium_proxy"
+        ].fillna(0).sum()
 
         cg = calls["gex"].sum(
             min_count=1
@@ -1299,131 +1043,224 @@ def build_strike_table(
             }
         )
 
-    return pd.DataFrame(
-        rows
-    )
+    return pd.DataFrame(rows)
 
 
 # ============================================================
-# DYNAMIC BAR STRUCTURE
+# KEY PRICE STRUCTURE
 # ============================================================
 
-def build_bar_structure(
-    strike_table
+def build_key_price_structure(
+    data,
+    spot
 ):
 
-    if (
-        strike_table is None
-        or strike_table.empty
+    rows = []
+
+    for target in FOCUS_STRIKES:
+
+        frame = data[
+            abs(
+                data["strike"] - target
+            ) < 0.001
+        ]
+
+        if frame.empty:
+
+            rows.append(
+                {
+                    "strike": target,
+                    "call_oi": 0,
+                    "put_oi": 0,
+                    "total_oi": 0,
+                    "call_volume": 0,
+                    "put_volume": 0,
+                    "total_volume": 0,
+                    "call_premium": 0,
+                    "put_premium": 0,
+                    "total_premium": 0,
+                    "distance_pct":
+                        (
+                            target - spot
+                        )
+                        / spot
+                        * 100
+                        if spot > 0
+                        else np.nan
+                }
+            )
+
+            continue
+
+        calls = frame[
+            frame["option_type"] == "CALL"
+        ]
+
+        puts = frame[
+            frame["option_type"] == "PUT"
+        ]
+
+        call_oi = calls[
+            "openInterest"
+        ].fillna(0).sum()
+
+        put_oi = puts[
+            "openInterest"
+        ].fillna(0).sum()
+
+        call_volume = calls[
+            "volume"
+        ].fillna(0).sum()
+
+        put_volume = puts[
+            "volume"
+        ].fillna(0).sum()
+
+        call_premium = calls[
+            "premium_proxy"
+        ].fillna(0).sum()
+
+        put_premium = puts[
+            "premium_proxy"
+        ].fillna(0).sum()
+
+        rows.append(
+            {
+                "strike": target,
+
+                "call_oi": call_oi,
+                "put_oi": put_oi,
+                "total_oi":
+                    call_oi + put_oi,
+
+                "call_volume":
+                    call_volume,
+                "put_volume":
+                    put_volume,
+                "total_volume":
+                    call_volume + put_volume,
+
+                "call_premium":
+                    call_premium,
+                "put_premium":
+                    put_premium,
+                "total_premium":
+                    call_premium + put_premium,
+
+                "distance_pct":
+                    (
+                        target - spot
+                    )
+                    / spot
+                    * 100
+                    if spot > 0
+                    else np.nan
+            }
+        )
+
+    return pd.DataFrame(rows)
+
+
+# ============================================================
+# KEY PRICE ROLE
+# ============================================================
+
+def classify_price_role(
+    strike,
+    spot,
+    key_table
+):
+
+    strike = safe_float(strike)
+    spot = safe_float(spot)
+
+    if not np.isfinite(strike):
+        return "N/A"
+
+    if strike <= spot:
+
+        if strike == min(
+            FOCUS_STRIKES
+        ):
+
+            return "🛡 방어선"
+
+        return "🛡 지지 / 방어"
+
+    # Above spot
+
+    above = [
+        x for x in FOCUS_STRIKES
+        if x > spot
+    ]
+
+    if not above:
+        return "🎯 저항"
+
+    first_above = min(above)
+
+    if strike == first_above:
+        return "🟢 1차 돌파"
+
+    # Find highest concentration
+
+    if not key_table.empty:
+
+        positive = key_table[
+            key_table["strike"] > spot
+        ]
+
+        if not positive.empty:
+
+            max_oi_strike = positive.loc[
+                positive["total_oi"].idxmax(),
+                "strike"
+            ]
+
+            if strike == max_oi_strike:
+                return "🔥 핵심 저항"
+
+    if strike == max(
+        FOCUS_STRIKES
     ):
+        return "🎯 최대 집중"
+
+    return "🚀 상승 확인"
+
+
+# ============================================================
+# PRICE SCENARIO
+# ============================================================
+
+def build_price_scenario(
+    key_table,
+    spot
+):
+
+    if key_table.empty:
 
         return [
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
-            "📊 CALL / PUT BAR STRUCTURE",
-            "🟩 CALL   🟥 PUT",
-            "⚠️ 표시할 Strike 데이터가 없습니다.",
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            "⚠️ 가격 시나리오 데이터 없음"
         ]
 
     lines = []
 
     sorted_table = (
-        strike_table
-        .sort_values(
-            "strike"
+        key_table
+        .sort_values("strike")
+        .reset_index(drop=True)
+    )
+
+    max_oi = (
+        sorted_table["total_oi"]
+        .max()
+    )
+
+    for _, row in sorted_table.iterrows():
+
+        strike = safe_float(
+            row["strike"]
         )
-        .reset_index(
-            drop=True
-        )
-    )
-
-    oi_totals = (
-        sorted_table[
-            "call_oi"
-        ].fillna(0)
-        +
-        sorted_table[
-            "put_oi"
-        ].fillna(0)
-    )
-
-    volume_totals = (
-        sorted_table[
-            "call_volume"
-        ].fillna(0)
-        +
-        sorted_table[
-            "put_volume"
-        ].fillna(0)
-    )
-
-    premium_totals = (
-        sorted_table[
-            "call_premium"
-        ].fillna(0)
-        +
-        sorted_table[
-            "put_premium"
-        ].fillna(0)
-    )
-
-    oi_reference = (
-        oi_totals.max()
-        if not oi_totals.empty
-        else 0
-    )
-
-    volume_reference = (
-        volume_totals.max()
-        if not volume_totals.empty
-        else 0
-    )
-
-    premium_reference = (
-        premium_totals.max()
-        if not premium_totals.empty
-        else 0
-    )
-
-    lines.append(
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    )
-
-    lines.append(
-        "📊 CALL / PUT BAR STRUCTURE"
-    )
-
-    lines.append(
-        "🟩 CALL   🟥 PUT"
-    )
-
-    lines.append(
-        f"📏 BAR MAX: {BAR_WIDTH}칸"
-    )
-
-    lines.append(
-        "📐 규모가 작으면 BAR도 짧게 표시"
-    )
-
-    lines.append(
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    )
-
-    # --------------------------------------------------------
-    # OI
-    # --------------------------------------------------------
-
-    lines.append(
-        "🟢 OI STRUCTURE"
-    )
-
-    lines.append("")
-
-    for _, row in (
-        sorted_table.iterrows()
-    ):
-
-        strike = row["strike"]
 
         call_oi = safe_float(
             row["call_oi"]
@@ -1433,34 +1270,6 @@ def build_bar_structure(
             row["put_oi"]
         )
 
-        lines.append(
-            f"🎯 ${strike:g}   "
-            +
-            make_dual_bar_line(
-                call_oi,
-                put_oi,
-                oi_reference
-            )
-        )
-
-    lines.append("")
-
-    # --------------------------------------------------------
-    # VOLUME
-    # --------------------------------------------------------
-
-    lines.append(
-        "🔥 VOLUME STRUCTURE"
-    )
-
-    lines.append("")
-
-    for _, row in (
-        sorted_table.iterrows()
-    ):
-
-        strike = row["strike"]
-
         call_volume = safe_float(
             row["call_volume"]
         )
@@ -1469,66 +1278,216 @@ def build_bar_structure(
             row["put_volume"]
         )
 
+        oi_ratio = (
+            call_oi / put_oi
+            if put_oi > 0
+            else np.inf
+        )
+
+        role = classify_price_role(
+            strike,
+            spot,
+            key_table
+        )
+
+        if strike <= spot:
+
+            if call_oi >= put_oi:
+
+                structure = (
+                    "CALL OI 우위"
+                )
+
+            else:
+
+                structure = (
+                    "PUT OI 우위"
+                )
+
+            if strike == min(
+                FOCUS_STRIKES
+            ):
+
+                prefix = "🛡"
+
+            else:
+
+                prefix = "🟡"
+
+        else:
+
+            if (
+                call_volume > put_volume
+                and call_oi > put_oi
+            ):
+
+                structure = (
+                    "CALL OI + Volume 우위"
+                )
+
+            elif call_oi > put_oi:
+
+                structure = (
+                    "CALL OI 우위"
+                )
+
+            elif put_oi > call_oi:
+
+                structure = (
+                    "PUT OI 우위"
+                )
+
+            else:
+
+                structure = (
+                    "혼조"
+                )
+
+            if (
+                np.isfinite(max_oi)
+                and max_oi > 0
+                and row["total_oi"]
+                == max_oi
+            ):
+
+                prefix = "🎯"
+
+            elif strike == 85:
+
+                prefix = "🟢"
+
+            elif strike == 90:
+
+                prefix = "🔥"
+
+            elif strike == 95:
+
+                prefix = "🚀"
+
+            elif strike == 100:
+
+                prefix = "🎯"
+
+            else:
+
+                prefix = "📍"
+
         lines.append(
-            f"🎯 ${strike:g}   "
+            f"{prefix} ${strike:g} "
+            f"→ {role} "
+            f"| {structure}"
+        )
+
+    return lines
+
+
+# ============================================================
+# BAR STRUCTURE
+# ============================================================
+
+def build_bar_structure(
+    strike_table
+):
+
+    if strike_table.empty:
+        return []
+
+    lines = []
+
+    sorted_table = (
+        strike_table
+        .sort_values("strike")
+        .reset_index(drop=True)
+    )
+
+    oi_reference = (
+        sorted_table[
+            "call_oi"
+        ].fillna(0)
+        +
+        sorted_table[
+            "put_oi"
+        ].fillna(0)
+    ).max()
+
+    volume_reference = (
+        sorted_table[
+            "call_volume"
+        ].fillna(0)
+        +
+        sorted_table[
+            "put_volume"
+        ].fillna(0)
+    ).max()
+
+    premium_reference = (
+        sorted_table[
+            "call_premium"
+        ].fillna(0)
+        +
+        sorted_table[
+            "put_premium"
+        ].fillna(0)
+    ).max()
+
+    lines += [
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+        "📊 4. CALL / PUT BAR STRUCTURE",
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+        "🟩 CALL   🟥 PUT",
+        f"📏 BAR MAX: {BAR_WIDTH}칸",
+        "📐 규모가 작으면 BAR도 짧게 표시",
+        ""
+    ]
+
+    lines.append("🟢 OI STRUCTURE")
+    lines.append("")
+
+    for _, row in sorted_table.iterrows():
+
+        lines.append(
+            f"🎯 ${row['strike']:g}   "
             +
             make_dual_bar_line(
-                call_volume,
-                put_volume,
+                row["call_oi"],
+                row["put_oi"],
+                oi_reference
+            )
+        )
+
+    lines.append("")
+    lines.append("🔥 VOLUME STRUCTURE")
+    lines.append("")
+
+    for _, row in sorted_table.iterrows():
+
+        lines.append(
+            f"🎯 ${row['strike']:g}   "
+            +
+            make_dual_bar_line(
+                row["call_volume"],
+                row["put_volume"],
                 volume_reference
             )
         )
 
     lines.append("")
-
-    # --------------------------------------------------------
-    # PREMIUM
-    # --------------------------------------------------------
-
-    lines.append(
-        "💰 PREMIUM STRUCTURE"
-    )
-
+    lines.append("💰 PREMIUM STRUCTURE")
     lines.append("")
 
-    for _, row in (
-        sorted_table.iterrows()
-    ):
-
-        strike = row["strike"]
-
-        call_premium = safe_float(
-            row["call_premium"]
-        )
-
-        put_premium = safe_float(
-            row["put_premium"]
-        )
-
-        if not np.isfinite(
-            call_premium
-        ):
-
-            call_premium = 0
-
-        if not np.isfinite(
-            put_premium
-        ):
-
-            put_premium = 0
+    for _, row in sorted_table.iterrows():
 
         bar = make_dynamic_dual_bar(
-            call_premium,
-            put_premium,
+            row["call_premium"],
+            row["put_premium"],
             premium_reference
         )
 
         lines.append(
-            f"🎯 ${strike:g}   "
+            f"🎯 ${row['strike']:g}   "
             f"{bar} "
-            f"C {fmt_money(call_premium)} "
-            f"/ "
-            f"P {fmt_money(put_premium)}"
+            f"C {fmt_money(row['call_premium'])} "
+            f"/ P {fmt_money(row['put_premium'])}"
         )
 
     return lines
@@ -1542,93 +1501,52 @@ def build_expiration_structure(
     data
 ):
 
-    # ========================================================
-    # IMPORTANT:
-    # 빈 데이터 방어
-    # ========================================================
-
-    empty_columns = [
-        "expiration",
-        "DTE",
-        "call_volume",
-        "put_volume",
-        "total_volume",
-        "call_oi",
-        "put_oi",
-        "total_oi",
-        "call_premium",
-        "put_premium",
-        "total_premium",
-        "call_volume_ratio",
-        "call_oi_ratio",
-        "total_oi_concentration_pct"
-    ]
-
-    if (
-        data is None
-        or data.empty
-    ):
-
-        return pd.DataFrame(
-            columns=empty_columns
-        )
-
-    if (
-        "expiration" not in data.columns
-        or "option_type" not in data.columns
-    ):
-
-        return pd.DataFrame(
-            columns=empty_columns
-        )
-
     rows = []
 
-    for expiration, frame in (
-        data.groupby(
-            "expiration"
-        )
+    if data.empty:
+        return pd.DataFrame()
+
+    if "expiration" not in data.columns:
+        return pd.DataFrame()
+
+    for expiration, frame in data.groupby(
+        "expiration"
     ):
 
         if frame.empty:
-
             continue
 
         calls = frame[
-            frame["option_type"]
-            ==
-            "CALL"
+            frame["option_type"] == "CALL"
         ]
 
         puts = frame[
-            frame["option_type"]
-            ==
-            "PUT"
+            frame["option_type"] == "PUT"
         ]
 
-        cv = safe_sum(
-            calls["volume"]
-        )
+        cv = calls[
+            "volume"
+        ].fillna(0).sum()
 
-        pv = safe_sum(
-            puts["volume"]
-        )
+        pv = puts[
+            "volume"
+        ].fillna(0).sum()
 
-        coi = safe_sum(
-            calls["openInterest"]
-        )
+        coi = calls[
+            "openInterest"
+        ].fillna(0).sum()
 
-        poi = safe_sum(
-            puts["openInterest"]
-        )
+        poi = puts[
+            "openInterest"
+        ].fillna(0).sum()
 
-        cp = safe_sum(
-            calls["premium_proxy"]
-        )
+        cp = calls[
+            "premium_proxy"
+        ].fillna(0).sum()
 
-        pp = safe_sum(
-            puts["premium_proxy"]
-        )
+        pp = puts[
+            "premium_proxy"
+        ].fillna(0).sum()
 
         rows.append(
             {
@@ -1640,30 +1558,18 @@ def build_expiration_structure(
                         expiration
                     ),
 
-                "call_volume":
-                    cv,
-
-                "put_volume":
-                    pv,
-
+                "call_volume": cv,
+                "put_volume": pv,
                 "total_volume":
                     cv + pv,
 
-                "call_oi":
-                    coi,
-
-                "put_oi":
-                    poi,
-
+                "call_oi": coi,
+                "put_oi": poi,
                 "total_oi":
                     coi + poi,
 
-                "call_premium":
-                    cp,
-
-                "put_premium":
-                    pp,
-
+                "call_premium": cp,
+                "put_premium": pp,
                 "total_premium":
                     cp + pp,
 
@@ -1679,38 +1585,23 @@ def build_expiration_structure(
             }
         )
 
-    result = pd.DataFrame(
-        rows
-    )
-
-    # ========================================================
-    # IMPORTANT:
-    # groupby 결과가 비어있는 경우 방어
-    # ========================================================
+    result = pd.DataFrame(rows)
 
     if result.empty:
+        return pd.DataFrame()
 
-        return pd.DataFrame(
-            columns=empty_columns
-        )
+    total_oi = result[
+        "total_oi"
+    ].sum()
 
-    total_oi = safe_float(
-        result["total_oi"].sum()
-    )
-
-    if (
-        np.isfinite(total_oi)
-        and total_oi > 0
-    ):
+    if total_oi > 0:
 
         result[
             "total_oi_concentration_pct"
         ] = (
             result["total_oi"]
-            /
-            total_oi
-            *
-            100
+            / total_oi
+            * 100
         )
 
     else:
@@ -1721,12 +1612,8 @@ def build_expiration_structure(
 
     return (
         result
-        .sort_values(
-            "DTE"
-        )
-        .reset_index(
-            drop=True
-        )
+        .sort_values("DTE")
+        .reset_index(drop=True)
     )
 
 
@@ -1739,47 +1626,20 @@ def build_strike_expiration_structure(
     focus_strikes
 ):
 
-    empty_columns = [
-        "strike",
-        "expiration",
-        "DTE",
-        "call_volume",
-        "put_volume",
-        "total_volume",
-        "call_oi",
-        "put_oi",
-        "total_oi",
-        "call_premium",
-        "put_premium",
-        "total_premium",
-        "total_oi_pct",
-        "call_oi_pct",
-        "put_oi_pct"
-    ]
-
-    if (
-        data is None
-        or data.empty
-    ):
-
-        return pd.DataFrame(
-            columns=empty_columns
-        )
-
     rows = []
+
+    if data.empty:
+        return pd.DataFrame()
 
     for target in focus_strikes:
 
         strike_data = data[
             abs(
-                data["strike"]
-                -
-                target
+                data["strike"] - target
             ) < 0.001
         ]
 
         if strike_data.empty:
-
             continue
 
         for expiration, frame in (
@@ -1789,132 +1649,96 @@ def build_strike_expiration_structure(
         ):
 
             if frame.empty:
-
                 continue
 
             calls = frame[
-                frame["option_type"]
-                ==
-                "CALL"
+                frame["option_type"] == "CALL"
             ]
 
             puts = frame[
-                frame["option_type"]
-                ==
-                "PUT"
+                frame["option_type"] == "PUT"
             ]
 
-            cv = safe_sum(
-                calls["volume"]
-            )
+            cv = calls[
+                "volume"
+            ].fillna(0).sum()
 
-            pv = safe_sum(
-                puts["volume"]
-            )
+            pv = puts[
+                "volume"
+            ].fillna(0).sum()
 
-            coi = safe_sum(
-                calls["openInterest"]
-            )
+            coi = calls[
+                "openInterest"
+            ].fillna(0).sum()
 
-            poi = safe_sum(
-                puts["openInterest"]
-            )
+            poi = puts[
+                "openInterest"
+            ].fillna(0).sum()
 
-            cp = safe_sum(
-                calls["premium_proxy"]
-            )
+            cp = calls[
+                "premium_proxy"
+            ].fillna(0).sum()
 
-            pp = safe_sum(
-                puts["premium_proxy"]
-            )
+            pp = puts[
+                "premium_proxy"
+            ].fillna(0).sum()
 
             rows.append(
                 {
-                    "strike":
-                        target,
-
-                    "expiration":
-                        expiration,
-
+                    "strike": target,
+                    "expiration": expiration,
                     "DTE":
                         calculate_dte(
                             expiration
                         ),
 
-                    "call_volume":
-                        cv,
-
-                    "put_volume":
-                        pv,
-
+                    "call_volume": cv,
+                    "put_volume": pv,
                     "total_volume":
                         cv + pv,
 
-                    "call_oi":
-                        coi,
-
-                    "put_oi":
-                        poi,
-
+                    "call_oi": coi,
+                    "put_oi": poi,
                     "total_oi":
                         coi + poi,
 
-                    "call_premium":
-                        cp,
-
-                    "put_premium":
-                        pp,
-
+                    "call_premium": cp,
+                    "put_premium": pp,
                     "total_premium":
                         cp + pp
                 }
             )
 
-    result = pd.DataFrame(
-        rows
-    )
+    result = pd.DataFrame(rows)
 
     if result.empty:
+        return pd.DataFrame()
 
-        return pd.DataFrame(
-            columns=empty_columns
-        )
-
-    for strike in (
-        result["strike"].dropna().unique()
-    ):
+    for strike in result[
+        "strike"
+    ].unique():
 
         mask = (
             result["strike"]
-            ==
-            strike
+            == strike
         )
 
-        total_oi = safe_float(
-            result.loc[
-                mask,
-                "total_oi"
-            ].sum()
-        )
+        total_oi = result.loc[
+            mask,
+            "total_oi"
+        ].sum()
 
-        call_oi = safe_float(
-            result.loc[
-                mask,
-                "call_oi"
-            ].sum()
-        )
+        call_oi = result.loc[
+            mask,
+            "call_oi"
+        ].sum()
 
-        put_oi = safe_float(
-            result.loc[
-                mask,
-                "put_oi"
-            ].sum()
-        )
+        put_oi = result.loc[
+            mask,
+            "put_oi"
+        ].sum()
 
-        if (
-            np.isfinite(total_oi)
-            and total_oi > 0
-        ):
+        if total_oi > 0:
 
             result.loc[
                 mask,
@@ -1924,10 +1748,8 @@ def build_strike_expiration_structure(
                     mask,
                     "total_oi"
                 ]
-                /
-                total_oi
-                *
-                100
+                / total_oi
+                * 100
             )
 
         else:
@@ -1937,10 +1759,7 @@ def build_strike_expiration_structure(
                 "total_oi_pct"
             ] = np.nan
 
-        if (
-            np.isfinite(call_oi)
-            and call_oi > 0
-        ):
+        if call_oi > 0:
 
             result.loc[
                 mask,
@@ -1950,10 +1769,8 @@ def build_strike_expiration_structure(
                     mask,
                     "call_oi"
                 ]
-                /
-                call_oi
-                *
-                100
+                / call_oi
+                * 100
             )
 
         else:
@@ -1963,10 +1780,7 @@ def build_strike_expiration_structure(
                 "call_oi_pct"
             ] = np.nan
 
-        if (
-            np.isfinite(put_oi)
-            and put_oi > 0
-        ):
+        if put_oi > 0:
 
             result.loc[
                 mask,
@@ -1976,10 +1790,8 @@ def build_strike_expiration_structure(
                     mask,
                     "put_oi"
                 ]
-                /
-                put_oi
-                *
-                100
+                / put_oi
+                * 100
             )
 
         else:
@@ -2001,9 +1813,7 @@ def build_strike_expiration_structure(
                 False
             ]
         )
-        .reset_index(
-            drop=True
-        )
+        .reset_index(drop=True)
     )
 
 
@@ -2015,27 +1825,8 @@ def build_key_strike_summary(
     strike_expiration
 ):
 
-    empty_columns = [
-        "strike",
-        "total_oi",
-        "call_oi",
-        "put_oi",
-        "top_expiration",
-        "top_DTE",
-        "top_expiration_total_oi",
-        "top_expiration_call_oi",
-        "top_expiration_put_oi",
-        "top_expiration_oi_pct"
-    ]
-
-    if (
-        strike_expiration is None
-        or strike_expiration.empty
-    ):
-
-        return pd.DataFrame(
-            columns=empty_columns
-        )
+    if strike_expiration.empty:
+        return pd.DataFrame()
 
     rows = []
 
@@ -2044,10 +1835,6 @@ def build_key_strike_summary(
             "strike"
         )
     ):
-
-        if frame.empty:
-
-            continue
 
         frame = frame.sort_values(
             "total_oi",
@@ -2058,53 +1845,37 @@ def build_key_strike_summary(
 
         rows.append(
             {
-                "strike":
-                    strike,
+                "strike": strike,
 
                 "total_oi":
-                    safe_sum(
-                        frame["total_oi"]
-                    ),
+                    frame[
+                        "total_oi"
+                    ].sum(),
 
                 "call_oi":
-                    safe_sum(
-                        frame["call_oi"]
-                    ),
+                    frame[
+                        "call_oi"
+                    ].sum(),
 
                 "put_oi":
-                    safe_sum(
-                        frame["put_oi"]
-                    ),
+                    frame[
+                        "put_oi"
+                    ].sum(),
 
                 "top_expiration":
-                    top.get(
-                        "expiration",
-                        "N/A"
-                    ),
+                    top["expiration"],
 
                 "top_DTE":
-                    top.get(
-                        "DTE",
-                        np.nan
-                    ),
+                    top["DTE"],
 
                 "top_expiration_total_oi":
-                    top.get(
-                        "total_oi",
-                        0
-                    ),
+                    top["total_oi"],
 
                 "top_expiration_call_oi":
-                    top.get(
-                        "call_oi",
-                        0
-                    ),
+                    top["call_oi"],
 
                 "top_expiration_put_oi":
-                    top.get(
-                        "put_oi",
-                        0
-                    ),
+                    top["put_oi"],
 
                 "top_expiration_oi_pct":
                     top.get(
@@ -2114,22 +1885,10 @@ def build_key_strike_summary(
             }
         )
 
-    if not rows:
-
-        return pd.DataFrame(
-            columns=empty_columns
-        )
-
     return (
-        pd.DataFrame(
-            rows
-        )
-        .sort_values(
-            "strike"
-        )
-        .reset_index(
-            drop=True
-        )
+        pd.DataFrame(rows)
+        .sort_values("strike")
+        .reset_index(drop=True)
     )
 
 
@@ -2137,24 +1896,7 @@ def build_key_strike_summary(
 # TOP CONTRACTS
 # ============================================================
 
-def build_top_contracts(
-    data
-):
-
-    if (
-        data is None
-        or data.empty
-    ):
-
-        result = data.copy()
-
-        result["importance"] = (
-            pd.Series(
-                dtype=float
-            )
-        )
-
-        return result
+def build_top_contracts(data):
 
     result = data.copy()
 
@@ -2164,9 +1906,7 @@ def build_top_contracts(
                 "premium_proxy"
             ]
             .fillna(0)
-            .clip(
-                lower=0
-            )
+            .clip(lower=0)
         )
         +
         np.log1p(
@@ -2174,9 +1914,7 @@ def build_top_contracts(
                 "volume"
             ]
             .fillna(0)
-            .clip(
-                lower=0
-            )
+            .clip(lower=0)
         )
         +
         np.log1p(
@@ -2184,9 +1922,7 @@ def build_top_contracts(
                 "openInterest"
             ]
             .fillna(0)
-            .clip(
-                lower=0
-            )
+            .clip(lower=0)
         )
         +
         np.log1p(
@@ -2195,9 +1931,7 @@ def build_top_contracts(
             ]
             .fillna(0)
             .abs()
-            .clip(
-                lower=0
-            )
+            .clip(lower=0)
         )
     )
 
@@ -2208,9 +1942,6 @@ def build_top_contracts(
             ascending=False
         )
         .head(50)
-        .reset_index(
-            drop=True
-        )
     )
 
 
@@ -2224,139 +1955,81 @@ def find_wall(
     option_type
 ):
 
-    if (
-        strike_table is None
-        or strike_table.empty
-    ):
-
-        return None
-
-    spot = safe_float(
-        spot
-    )
-
-    if (
-        not np.isfinite(spot)
-        or spot <= 0
-    ):
-
+    if strike_table.empty:
         return None
 
     if option_type == "CALL":
 
         candidates = strike_table[
-            strike_table[
-                "strike"
-            ]
-            >=
-            spot
+            strike_table["strike"] >= spot
         ].copy()
 
         candidates["oi"] = (
-            candidates[
-                "call_oi"
-            ]
+            candidates["call_oi"]
         )
 
         candidates["gex_abs"] = (
-            candidates[
-                "call_gex"
-            ].abs()
+            candidates["call_gex"].abs()
         )
 
         candidates["volume"] = (
-            candidates[
-                "call_volume"
-            ]
+            candidates["call_volume"]
         )
 
     else:
 
         candidates = strike_table[
-            strike_table[
-                "strike"
-            ]
-            <=
-            spot
+            strike_table["strike"] <= spot
         ].copy()
 
         candidates["oi"] = (
-            candidates[
-                "put_oi"
-            ]
+            candidates["put_oi"]
         )
 
         candidates["gex_abs"] = (
-            candidates[
-                "put_gex"
-            ].abs()
+            candidates["put_gex"].abs()
         )
 
         candidates["volume"] = (
-            candidates[
-                "put_volume"
-            ]
+            candidates["put_volume"]
         )
 
     if candidates.empty:
-
         return None
 
     candidates["distance"] = (
         (
-            candidates[
-                "strike"
-            ]
-            -
-            spot
+            candidates["strike"] - spot
         ).abs()
-        /
-        spot
+        / spot
     )
 
     candidates = candidates[
-        candidates[
-            "distance"
-        ]
-        <=
-        0.20
+        candidates["distance"] <= 0.20
     ].copy()
 
     if candidates.empty:
-
         return None
 
     candidates["score"] = (
         np.log1p(
-            candidates[
-                "oi"
-            ]
+            candidates["oi"]
             .fillna(0)
-            .clip(
-                lower=0
-            )
+            .clip(lower=0)
         )
         +
         np.log1p(
-            candidates[
-                "gex_abs"
-            ]
+            candidates["gex_abs"]
             .fillna(0)
-            .clip(
-                lower=0
-            )
+            .clip(lower=0)
         )
         +
         0.25
         *
         np.log1p(
-            candidates[
-                "volume"
-            ]
+            candidates["volume"]
             .fillna(0)
-            .clip(
-                lower=0
-            )
+            .clip(lower=0)
         )
     )
 
@@ -2366,17 +2039,9 @@ def find_wall(
         (
             1
             +
-            candidates[
-                "distance"
-            ]
-            *
-            20
+            candidates["distance"] * 20
         )
     )
-
-    if candidates.empty:
-
-        return None
 
     return (
         candidates
@@ -2398,6 +2063,7 @@ def build_report(
     expiration_structure,
     strike_expiration,
     key_strike_summary,
+    key_price_structure,
     top_contracts,
     spot,
     symbol,
@@ -2407,150 +2073,63 @@ def build_report(
     started
 ):
 
-    # ========================================================
-    # EMPTY DATA DEFENSE
-    # ========================================================
-
-    if data is None:
-
-        data = pd.DataFrame()
-
-    if strike_table is None:
-
-        strike_table = pd.DataFrame()
-
-    if expiration_structure is None:
-
-        expiration_structure = pd.DataFrame()
-
-    if strike_expiration is None:
-
-        strike_expiration = pd.DataFrame()
-
-    if key_strike_summary is None:
-
-        key_strike_summary = pd.DataFrame()
-
-    if top_contracts is None:
-
-        top_contracts = pd.DataFrame()
-
-    if data.empty:
-
-        return "\n".join(
-            [
-                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
-                f"🔥 {symbol} OPTION STRUCTURE",
-                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
-                "",
-                f"💰 현재가: ${spot:.2f}",
-                (
-                    f"🎯 분석 Strike: "
-                    f"${min_strike:g} ~ ${max_strike:g}"
-                ),
-                f"📅 분석 DTE: 1 ~ {max_dte}",
-                "📊 분석 행수: 0",
-                "",
-                "❌ 분석할 옵션 데이터가 없습니다.",
-                "",
-                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
-                "⚠️ DATA LIMITATIONS",
-                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
-                "• Yahoo Finance 무료 옵션 데이터",
-                "• 현재 필터 조건에서 데이터가 없음",
-                "",
-                (
-                    "Generated: "
-                    +
-                    started.strftime(
-                        "%Y-%m-%d %H:%M:%S UTC"
-                    )
-                )
-            ]
-        )
-
     calls = data[
-        data["option_type"]
-        ==
-        "CALL"
+        data["option_type"] == "CALL"
     ]
 
     puts = data[
-        data["option_type"]
-        ==
-        "PUT"
+        data["option_type"] == "PUT"
     ]
 
-    cv = safe_sum(
-        calls["volume"]
-    )
+    cv = calls["volume"].fillna(0).sum()
+    pv = puts["volume"].fillna(0).sum()
 
-    pv = safe_sum(
-        puts["volume"]
-    )
+    coi = calls[
+        "openInterest"
+    ].fillna(0).sum()
 
-    coi = safe_sum(
-        calls["openInterest"]
-    )
+    poi = puts[
+        "openInterest"
+    ].fillna(0).sum()
 
-    poi = safe_sum(
-        puts["openInterest"]
-    )
+    cp = calls[
+        "premium_proxy"
+    ].fillna(0).sum()
 
-    cp = safe_sum(
-        calls["premium_proxy"]
-    )
-
-    pp = safe_sum(
-        puts["premium_proxy"]
-    )
+    pp = puts[
+        "premium_proxy"
+    ].fillna(0).sum()
 
     total_volume = cv + pv
     total_oi = coi + poi
     total_premium = cp + pp
 
     cv_ratio = (
-        cv
-        /
-        total_volume
-        *
-        100
+        cv / total_volume * 100
         if total_volume > 0
         else np.nan
     )
 
     coi_ratio = (
-        coi
-        /
-        total_oi
-        *
-        100
+        coi / total_oi * 100
         if total_oi > 0
         else np.nan
     )
 
     cp_ratio = (
-        cp
-        /
-        total_premium
-        *
-        100
+        cp / total_premium * 100
         if total_premium > 0
         else np.nan
     )
 
     cv_oi = (
-        cv
-        /
-        coi
+        cv / coi
         if coi > 0
         else np.nan
     )
 
     pv_oi = (
-        pv
-        /
-        poi
+        pv / poi
         if poi > 0
         else np.nan
     )
@@ -2568,9 +2147,7 @@ def build_report(
         and np.isfinite(pgex)
     ):
 
-        net_gex = (
-            tgex + pgex
-        )
+        net_gex = tgex + pgex
 
     elif np.isfinite(tgex):
 
@@ -2587,16 +2164,12 @@ def build_report(
     temp = data.copy()
 
     temp["atm_distance"] = (
-        temp["strike"]
-        -
-        spot
+        temp["strike"] - spot
     ).abs()
 
     atm_iv = (
         temp
-        .sort_values(
-            "atm_distance"
-        )
+        .sort_values("atm_distance")
         .head(10)[
             "impliedVolatility"
         ]
@@ -2666,11 +2239,11 @@ def build_report(
         ),
         "",
         (
-            f"CALL Premium Proxy: "
+            f"CALL Premium: "
             f"{fmt_money(cp)}"
         ),
         (
-            f"PUT Premium Proxy : "
+            f"PUT Premium : "
             f"{fmt_money(pp)}"
         ),
         (
@@ -2704,6 +2277,167 @@ def build_report(
         ),
         ""
     ]
+
+    # ========================================================
+    # KEY PRICE STRUCTURE
+    # ========================================================
+
+    report += [
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+        "🎯 3. KEY PRICE STRUCTURE",
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+        ""
+    ]
+
+    if key_price_structure.empty:
+
+        report.append(
+            "⚠️ KEY PRICE STRUCTURE DATA 없음"
+        )
+
+    else:
+
+        for _, row in (
+            key_price_structure
+            .sort_values("strike")
+            .iterrows()
+        ):
+
+            strike = row["strike"]
+
+            call_oi = row["call_oi"]
+            put_oi = row["put_oi"]
+
+            call_volume = row[
+                "call_volume"
+            ]
+
+            put_volume = row[
+                "put_volume"
+            ]
+
+            call_premium = row[
+                "call_premium"
+            ]
+
+            put_premium = row[
+                "put_premium"
+            ]
+
+            if strike <= spot:
+
+                if strike == 80:
+
+                    title = "🛡 $80 방어선"
+
+                else:
+
+                    title = (
+                        f"🛡 ${strike:g} 지지"
+                    )
+
+            elif strike == 85:
+
+                title = "🟢 $85 1차 돌파"
+
+            elif strike == 90:
+
+                title = "🔥 $90 핵심"
+
+            elif strike == 95:
+
+                title = "🚀 $95 상승 확인"
+
+            elif strike == 100:
+
+                title = "🎯 $100 최대 집중"
+
+            else:
+
+                title = (
+                    f"🎯 ${strike:g}"
+                )
+
+            report += [
+                title,
+                (
+                    f"CALL OI: "
+                    f"{call_oi:,.0f}"
+                    f" / PUT OI: "
+                    f"{put_oi:,.0f}"
+                ),
+                (
+                    f"CALL Vol: "
+                    f"{call_volume:,.0f}"
+                    f" / PUT Vol: "
+                    f"{put_volume:,.0f}"
+                ),
+                (
+                    f"CALL Premium: "
+                    f"{fmt_money(call_premium)}"
+                    f" / PUT Premium: "
+                    f"{fmt_money(put_premium)}"
+                )
+            ]
+
+            if call_oi > put_oi:
+
+                report.append(
+                    "🟢 OI: CALL 우위"
+                )
+
+            elif put_oi > call_oi:
+
+                report.append(
+                    "🔴 OI: PUT 우위"
+                )
+
+            else:
+
+                report.append(
+                    "🟡 OI: 균형"
+                )
+
+            if call_volume > put_volume:
+
+                report.append(
+                    "🟢 Volume: CALL 우위"
+                )
+
+            elif put_volume > call_volume:
+
+                report.append(
+                    "🔴 Volume: PUT 우위"
+                )
+
+            else:
+
+                report.append(
+                    "🟡 Volume: 균형"
+                )
+
+            report.append("")
+
+    # ========================================================
+    # PRICE SCENARIO
+    # ========================================================
+
+    report += [
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+        "📈 5. PRICE SCENARIO",
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    ]
+
+    scenario_lines = build_price_scenario(
+        key_price_structure,
+        spot
+    )
+
+    report.extend(
+        scenario_lines
+    )
+
+    report.append("")
 
     # ========================================================
     # BAR
@@ -2773,42 +2507,29 @@ def build_report(
     report += [
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
         "🎯 STRIKE STRUCTURE",
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+        (
+            "STRIKE | C-VOL | P-VOL | "
+            "C-OI | P-OI | C-PREM | P-PREM"
+        ),
+        "────────────────────────────────────────"
     ]
 
-    if strike_table.empty:
+    for _, row in (
+        strike_table
+        .sort_values("strike")
+        .iterrows()
+    ):
 
         report.append(
-            "N/A"
+            f"${row['strike']:g} | "
+            f"{row['call_volume']:,.0f} | "
+            f"{row['put_volume']:,.0f} | "
+            f"{row['call_oi']:,.0f} | "
+            f"{row['put_oi']:,.0f} | "
+            f"{fmt_money(row['call_premium'])} | "
+            f"{fmt_money(row['put_premium'])}"
         )
-
-    else:
-
-        report += [
-            (
-                "STRIKE | C-VOL | P-VOL | "
-                "C-OI | P-OI | C-PREM | P-PREM"
-            ),
-            "────────────────────────────────────────"
-        ]
-
-        for _, row in (
-            strike_table
-            .sort_values(
-                "strike"
-            )
-            .iterrows()
-        ):
-
-            report.append(
-                f"${row['strike']:g} | "
-                f"{row['call_volume']:,.0f} | "
-                f"{row['put_volume']:,.0f} | "
-                f"{row['call_oi']:,.0f} | "
-                f"{row['put_oi']:,.0f} | "
-                f"{fmt_money(row['call_premium'])} | "
-                f"{fmt_money(row['put_premium'])}"
-            )
 
     report.append("")
 
@@ -2822,46 +2543,27 @@ def build_report(
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     ]
 
-    if strike_table.empty:
+    for _, row in (
+        strike_table
+        .sort_values(
+            "total_oi",
+            ascending=False
+        )
+        .head(10)
+        .iterrows()
+    ):
 
         report.append(
-            "N/A"
+            f"${row['strike']:g}"
+            f" | Total OI "
+            f"{row['total_oi']:,.0f}"
+            f" | C "
+            f"{row['call_oi']:,.0f}"
+            f" / P "
+            f"{row['put_oi']:,.0f}"
+            f" | GEX "
+            f"{fmt_money(row['net_gex'])}"
         )
-
-    else:
-
-        high_oi = (
-            strike_table
-            .sort_values(
-                "total_oi",
-                ascending=False
-            )
-            .head(10)
-        )
-
-        if high_oi.empty:
-
-            report.append(
-                "N/A"
-            )
-
-        else:
-
-            for _, row in (
-                high_oi.iterrows()
-            ):
-
-                report.append(
-                    f"${row['strike']:g}"
-                    f" | Total OI "
-                    f"{row['total_oi']:,.0f}"
-                    f" | C "
-                    f"{row['call_oi']:,.0f}"
-                    f" / P "
-                    f"{row['put_oi']:,.0f}"
-                    f" | GEX "
-                    f"{fmt_money(row['net_gex'])}"
-                )
 
     report.append("")
 
@@ -2872,48 +2574,38 @@ def build_report(
     report += [
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
         "📅 EXPIRATION STRUCTURE",
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+        (
+            "DTE | EXPIRATION | C-OI | P-OI | "
+            "TOTAL OI | OI %"
+        ),
+        "────────────────────────────────────────"
     ]
-
-    # ========================================================
-    # IMPORTANT:
-    # expiration_structure 빈 데이터 방어
-    # ========================================================
 
     if expiration_structure.empty:
 
         report.append(
-            "⚠️ 만기 구조 데이터가 없습니다."
+            "⚠️ 만기 구조 데이터 없음"
         )
 
     else:
 
-        report += [
-            (
-                "DTE | EXPIRATION | C-OI | P-OI | "
-                "TOTAL OI | OI %"
-            ),
-            "────────────────────────────────────────"
-        ]
-
         for _, row in (
-            expiration_structure.iterrows()
+            expiration_structure
+            .iterrows()
         ):
 
             dte = safe_float(
-                row.get(
-                    "DTE",
-                    np.nan
-                )
+                row["DTE"]
             )
 
             report.append(
                 f"{int(dte) if np.isfinite(dte) else 'N/A'} | "
-                f"{row.get('expiration', 'N/A')} | "
-                f"{safe_float(row.get('call_oi', 0)):,.0f} | "
-                f"{safe_float(row.get('put_oi', 0)):,.0f} | "
-                f"{safe_float(row.get('total_oi', 0)):,.0f} | "
-                f"{fmt_pct(row.get('total_oi_concentration_pct', np.nan))}"
+                f"{row['expiration']} | "
+                f"{row['call_oi']:,.0f} | "
+                f"{row['put_oi']:,.0f} | "
+                f"{row['total_oi']:,.0f} | "
+                f"{fmt_pct(row['total_oi_concentration_pct'])}"
             )
 
     report.append("")
@@ -2932,54 +2624,50 @@ def build_report(
 
     if key_strike_summary.empty:
 
-        report.append(
-            "⚠️ 지정 Focus Strike 데이터가 없습니다."
-        )
+        report.append("N/A")
 
     else:
 
         for _, row in (
-            key_strike_summary.iterrows()
+            key_strike_summary
+            .iterrows()
         ):
 
             dte = safe_float(
-                row.get(
-                    "top_DTE",
-                    np.nan
-                )
+                row["top_DTE"]
             )
 
             report += [
-                f"💥 ${safe_float(row.get('strike', np.nan)):g}",
+                f"💥 ${row['strike']:g}",
                 (
                     f"   Total OI: "
-                    f"{safe_float(row.get('total_oi', 0)):,.0f}"
+                    f"{row['total_oi']:,.0f}"
                 ),
                 (
                     f"   CALL OI:  "
-                    f"{safe_float(row.get('call_oi', 0)):,.0f}"
+                    f"{row['call_oi']:,.0f}"
                 ),
                 (
                     f"   PUT OI :  "
-                    f"{safe_float(row.get('put_oi', 0)):,.0f}"
+                    f"{row['put_oi']:,.0f}"
                 ),
                 (
                     f"   🏆 최대 집중: "
-                    f"{row.get('top_expiration', 'N/A')} "
+                    f"{row['top_expiration']} "
                     f"| DTE "
                     f"{int(dte) if np.isfinite(dte) else 'N/A'}"
                 ),
                 (
                     f"   OI: "
-                    f"{safe_float(row.get('top_expiration_total_oi', 0)):,.0f}"
+                    f"{row['top_expiration_total_oi']:,.0f}"
                     f" | "
-                    f"{fmt_pct(row.get('top_expiration_oi_pct', np.nan))}"
+                    f"{fmt_pct(row['top_expiration_oi_pct'])}"
                 ),
                 (
                     f"   C-OI: "
-                    f"{safe_float(row.get('top_expiration_call_oi', 0)):,.0f}"
+                    f"{row['top_expiration_call_oi']:,.0f}"
                     f" | P-OI: "
-                    f"{safe_float(row.get('top_expiration_put_oi', 0)):,.0f}"
+                    f"{row['top_expiration_put_oi']:,.0f}"
                 ),
                 ""
             ]
@@ -2988,10 +2676,7 @@ def build_report(
     # DETAILED EXPIRATION
     # ========================================================
 
-    if (
-        strike_expiration is not None
-        and not strike_expiration.empty
-    ):
+    if not strike_expiration.empty:
 
         report += [
             "📌 상세 만기 분포",
@@ -3002,16 +2687,13 @@ def build_report(
 
             frame = strike_expiration[
                 abs(
-                    strike_expiration[
-                        "strike"
-                    ]
+                    strike_expiration["strike"]
                     -
                     strike
                 ) < 0.001
             ]
 
             if frame.empty:
-
                 continue
 
             report.append(
@@ -3029,36 +2711,25 @@ def build_report(
             ):
 
                 dte = safe_float(
-                    row.get(
-                        "DTE",
-                        np.nan
-                    )
+                    row["DTE"]
                 )
 
                 report.append(
                     f"DTE "
                     f"{int(dte) if np.isfinite(dte) else 'N/A'}"
                     f" | "
-                    f"{row.get('expiration', 'N/A')}"
+                    f"{row['expiration']}"
                     f" | C-OI "
-                    f"{safe_float(row.get('call_oi', 0)):,.0f}"
+                    f"{row['call_oi']:,.0f}"
                     f" | P-OI "
-                    f"{safe_float(row.get('put_oi', 0)):,.0f}"
+                    f"{row['put_oi']:,.0f}"
                     f" | TOTAL "
-                    f"{safe_float(row.get('total_oi', 0)):,.0f}"
+                    f"{row['total_oi']:,.0f}"
                     f" | "
                     f"{fmt_pct(row.get('total_oi_pct', np.nan))}"
                 )
 
             report.append("")
-
-    else:
-
-        report += [
-            "📌 상세 만기 분포",
-            "⚠️ Focus Strike의 만기별 데이터가 없습니다.",
-            ""
-        ]
 
     # ========================================================
     # TOP CONTRACTS
@@ -3070,101 +2741,47 @@ def build_report(
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     ]
 
-    if top_contracts.empty:
+    for _, row in (
+        top_contracts
+        .head(20)
+        .iterrows()
+    ):
 
-        report.append(
-            "N/A"
+        dte = safe_float(
+            row["DTE"]
         )
 
-    else:
+        volume_oi = safe_float(
+            row["volume_oi"]
+        )
 
-        for _, row in (
-            top_contracts
-            .head(20)
-            .iterrows()
-        ):
-
-            dte = safe_float(
-                row.get(
-                    "DTE",
-                    np.nan
-                )
-            )
-
-            volume = safe_float(
-                row.get(
-                    "volume",
-                    np.nan
-                )
-            )
-
-            oi = safe_float(
-                row.get(
-                    "openInterest",
-                    np.nan
-                )
-            )
-
-            premium = safe_float(
-                row.get(
-                    "premium_proxy",
-                    np.nan
-                )
-            )
-
-            volume_oi = safe_float(
-                row.get(
-                    "volume_oi",
-                    np.nan
-                )
-            )
-
-            option_type = (
-                str(
-                    row.get(
-                        "option_type",
-                        "N/A"
-                    )
-                )
-            )
-
-            strike = safe_float(
-                row.get(
-                    "strike",
-                    np.nan
-                )
-            )
-
-            base = (
-                f"{option_type:4s} "
-                f"${strike:g}"
-                f" | DTE "
-                f"{int(dte) if np.isfinite(dte) else 'N/A'}"
-                f" | Vol "
-                f"{fmt_number(volume)}"
-                f" | OI "
-                f"{fmt_number(oi)}"
-                f" | Premium "
-                f"{fmt_money(premium)}"
-            )
-
-            if np.isfinite(
-                volume_oi
-            ):
-
-                report.append(
-                    base
-                    +
-                    f" | V/OI {volume_oi:.2f}"
-                )
-
-            else:
-
-                report.append(
-                    base
-                    +
-                    " | V/OI N/A"
-                )
+        report.append(
+            f"{row['option_type']:4s} "
+            f"${row['strike']:g}"
+            f" | DTE "
+            f"{int(dte) if np.isfinite(dte) else 'N/A'}"
+            f" | Vol "
+            f"{fmt_number(row['volume'])}"
+            f" | OI "
+            f"{fmt_number(row['openInterest'])}"
+            f" | Premium "
+            f"{fmt_money(row['premium_proxy'])}"
+            f" | V/OI "
+            f"{volume_oi:.2f}"
+            if np.isfinite(volume_oi)
+            else
+            f"{row['option_type']:4s} "
+            f"${row['strike']:g}"
+            f" | DTE "
+            f"{int(dte) if np.isfinite(dte) else 'N/A'}"
+            f" | Vol "
+            f"{fmt_number(row['volume'])}"
+            f" | OI "
+            f"{fmt_number(row['openInterest'])}"
+            f" | Premium "
+            f"{fmt_money(row['premium_proxy'])}"
+            f" | V/OI N/A"
+        )
 
     # ========================================================
     # FINAL STRUCTURE
@@ -3189,12 +2806,6 @@ def build_report(
             "🔴 PUT Volume 우세"
         )
 
-    else:
-
-        report.append(
-            "🟡 CALL/PUT Volume 동률"
-        )
-
     if coi > poi:
 
         report.append(
@@ -3205,12 +2816,6 @@ def build_report(
 
         report.append(
             "🔴 PUT OI 우세"
-        )
-
-    else:
-
-        report.append(
-            "🟡 CALL/PUT OI 동률"
         )
 
     if cp > pp:
@@ -3225,15 +2830,7 @@ def build_report(
             "🔴 PUT Premium 우세"
         )
 
-    else:
-
-        report.append(
-            "🟡 CALL/PUT Premium 동률"
-        )
-
-    if np.isfinite(
-        net_gex
-    ):
+    if np.isfinite(net_gex):
 
         if net_gex > 0:
 
@@ -3253,12 +2850,6 @@ def build_report(
                 "🟡 Net GEX Proxy: NEUTRAL"
             )
 
-    else:
-
-        report.append(
-            "⚪ Net GEX Proxy: N/A"
-        )
-
     # ========================================================
     # LIMITATIONS
     # ========================================================
@@ -3269,7 +2860,7 @@ def build_report(
         "⚠️ DATA LIMITATIONS",
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
         "• Yahoo Finance 무료 옵션 데이터",
-        "• 수집: 전체 Yahoo 만기/행사가",
+        "• 전체 Yahoo 만기/행사가 수집",
         "• 분석: 지정 Strike/DTE 범위",
         "• DTE 0 제외",
         "• Premium = 거래대금 Proxy",
@@ -3288,18 +2879,14 @@ def build_report(
         )
     ]
 
-    return "\n".join(
-        report
-    )
+    return "\n".join(report)
 
 
 # ============================================================
 # TELEGRAM
 # ============================================================
 
-def send_telegram(
-    text
-):
+def send_telegram(text):
 
     token = os.getenv(
         "TELEGRAM_BOT_TOKEN"
@@ -3309,30 +2896,13 @@ def send_telegram(
         "TELEGRAM_CHAT_ID"
     )
 
-    # ========================================================
-    # IMPORTANT:
-    # Telegram 설정이 없으면 성공으로 처리하지 않는다.
-    # GitHub Actions에서 확실히 실패시키기 위해
-    # RuntimeError를 발생시킨다.
-    # ========================================================
-
     if (
         not token
         or not chat_id
     ):
 
-        error_message = (
-            "Telegram credentials not configured. "
-            "TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID "
-            "must be configured."
-        )
-
-        print(
-            f"❌ {error_message}"
-        )
-
         raise RuntimeError(
-            error_message
+            "Telegram credentials not configured."
         )
 
     url = (
@@ -3355,13 +2925,10 @@ def send_telegram(
         )
 
         if split_at <= 0:
-
             split_at = max_length
 
         chunks.append(
-            remaining[
-                :split_at
-            ]
+            remaining[:split_at]
         )
 
         remaining = remaining[
@@ -3369,53 +2936,31 @@ def send_telegram(
         ]
 
     if remaining:
-
-        chunks.append(
-            remaining
-        )
-
-    if not chunks:
-
-        raise RuntimeError(
-            "Telegram message is empty."
-        )
+        chunks.append(remaining)
 
     print()
     print("=" * 70)
     print("SEND TELEGRAM")
     print("=" * 70)
 
-    successful_chunks = 0
+    failed_chunks = []
 
     for index, chunk in enumerate(
         chunks,
         start=1
     ):
 
-        payload = (
-            urllib.parse.urlencode(
-                {
-                    "chat_id":
-                        chat_id,
+        payload = urllib.parse.urlencode(
+            {
+                "chat_id": chat_id,
+                "text": chunk
+            }
+        ).encode("utf-8")
 
-                    "text":
-                        chunk,
-
-                    "disable_web_page_preview":
-                        "true"
-                }
-            )
-            .encode(
-                "utf-8"
-            )
-        )
-
-        request = (
-            urllib.request.Request(
-                url,
-                data=payload,
-                method="POST"
-            )
+        request = urllib.request.Request(
+            url,
+            data=payload,
+            method="POST"
         )
 
         try:
@@ -3425,123 +2970,45 @@ def send_telegram(
                 timeout=30
             ) as response:
 
-                status_code = (
-                    response.status
-                )
-
                 result = (
                     response
                     .read()
-                    .decode(
-                        "utf-8"
-                    )
+                    .decode("utf-8")
                 )
 
-                print(
-                    f"Telegram "
-                    f"[{index}/{len(chunks)}] "
-                    f"HTTP {status_code}"
-                )
+            print(
+                f"Telegram "
+                f"{index}/{len(chunks)}: "
+                f"{result[:200]}"
+            )
 
-                if status_code != 200:
+            if '"ok":true' not in result.lower():
 
-                    raise RuntimeError(
-                        (
-                            "Telegram HTTP "
-                            f"status {status_code}: "
-                            f"{result[:500]}"
-                        )
-                    )
-
-                # Telegram API response 확인
-                try:
-
-                    result_json = (
-                        __import__(
-                            "json"
-                        ).loads(
-                            result
-                        )
-                    )
-
-                except Exception:
-
-                    result_json = {}
-
-                if not result_json.get(
-                    "ok",
-                    False
-                ):
-
-                    raise RuntimeError(
-                        (
-                            "Telegram API returned "
-                            f"ok=false: "
-                            f"{result[:500]}"
-                        )
-                    )
-
-                successful_chunks += 1
-
-                print(
-                    "✅ Telegram chunk sent"
+                failed_chunks.append(
+                    index
                 )
 
         except Exception as exc:
 
-            print()
             print(
-                "❌ TELEGRAM SEND FAILED"
+                f"❌ Telegram chunk "
+                f"{index} failed:",
+                repr(exc)
             )
 
-            print(
-                f"Chunk: "
-                f"{index}/{len(chunks)}"
-            )
+            failed_chunks.append(index)
 
-            print(
-                f"Error type: "
-                f"{type(exc).__name__}"
-            )
-
-            print(
-                f"Error: "
-                f"{repr(exc)}"
-            )
-
-            # =================================================
-            # IMPORTANT:
-            # Telegram 하나라도 실패하면 workflow 실패
-            # =================================================
-
-            raise RuntimeError(
-                (
-                    "Telegram delivery failed. "
-                    f"Successful chunks: "
-                    f"{successful_chunks}/"
-                    f"{len(chunks)}"
-                )
-            ) from exc
-
-    if successful_chunks != len(
-        chunks
-    ):
+    if failed_chunks:
 
         raise RuntimeError(
-            (
-                "Telegram delivery incomplete: "
-                f"{successful_chunks}/"
-                f"{len(chunks)}"
-            )
+            "Telegram sending failed. "
+            f"Failed chunks: {failed_chunks}"
         )
 
-    print()
     print(
         f"✅ Telegram sent successfully: "
-        f"{successful_chunks} message(s)"
+        f"{len(chunks)} message(s)"
     )
-
-    return True
 
 
 # ============================================================
@@ -3554,6 +3021,7 @@ def save_outputs(
     expiration_structure,
     strike_expiration,
     key_strike_summary,
+    key_price_structure,
     top_contracts,
     summary,
     report,
@@ -3571,6 +3039,9 @@ def save_outputs(
 
         "strike_structure.csv":
             strike_table,
+
+        "key_price_structure.csv":
+            key_price_structure,
 
         "expiration_structure.csv":
             expiration_structure,
@@ -3595,27 +3066,23 @@ def save_outputs(
     print("SAVE OUTPUTS")
     print("=" * 70)
 
-    for filename, dataframe in (
-        files.items()
-    ):
-
-        if dataframe is None:
-
-            dataframe = pd.DataFrame()
+    for filename, dataframe in files.items():
 
         path = os.path.join(
             output_dir,
             filename
         )
 
+        if dataframe is None:
+
+            dataframe = pd.DataFrame()
+
         dataframe.to_csv(
             path,
             index=False
         )
 
-        saved_files.append(
-            path
-        )
+        saved_files.append(path)
 
         print(
             f"💾 {filename:40s} "
@@ -3633,9 +3100,7 @@ def save_outputs(
         encoding="utf-8"
     ) as file:
 
-        file.write(
-            report
-        )
+        file.write(report)
 
     saved_files.append(
         report_path
@@ -3682,21 +3147,16 @@ def save_outputs(
             )
 
     print()
-    print(
-        "VERIFY SAVED FILES"
-    )
+    print("VERIFY SAVED FILES")
 
     all_ok = True
 
     for path in (
         saved_files
-        +
-        [manifest_path]
+        + [manifest_path]
     ):
 
-        exists = os.path.isfile(
-            path
-        )
+        exists = os.path.isfile(path)
 
         size = (
             os.path.getsize(path)
@@ -3721,19 +3181,16 @@ def save_outputs(
 
             all_ok = False
 
-    print()
-
-    if all_ok:
-
-        print(
-            "✅ ALL OUTPUT FILES SAVED"
-        )
-
-    else:
+    if not all_ok:
 
         raise RuntimeError(
             "One or more output files failed to save."
         )
+
+    print()
+    print(
+        "✅ ALL OUTPUT FILES SAVED"
+    )
 
 
 # ============================================================
@@ -3756,57 +3213,14 @@ def main():
         else None
     )
 
-    min_strike = (
-        args.min_strike
-    )
-
-    max_strike = (
-        args.max_strike
-    )
-
-    max_dte = (
-        args.max_dte
-    )
-
-    output_dir = (
-        args.output
-    )
-
-    # ========================================================
-    # BASIC VALIDATION
-    # ========================================================
-
-    if not symbol:
-
-        raise ValueError(
-            "Symbol cannot be empty."
-        )
-
-    if min_strike < 0:
-
-        raise ValueError(
-            "Minimum strike cannot be negative."
-        )
-
-    if max_strike < min_strike:
-
-        raise ValueError(
-            "MAX_STRIKE must be >= MIN_STRIKE."
-        )
-
-    if max_dte <= 0:
-
-        raise ValueError(
-            "MAX_DTE must be greater than zero."
-        )
+    min_strike = args.min_strike
+    max_strike = args.max_strike
+    max_dte = args.max_dte
+    output_dir = args.output
 
     started = datetime.now(
         timezone.utc
     )
-
-    # ========================================================
-    # HEADER
-    # ========================================================
 
     print()
     print("=" * 70)
@@ -3822,13 +3236,13 @@ def main():
     print(
         f"ANALYSIS     : "
         f"${min_strike:g}"
-        f" ~ "
+        f"~"
         f"${max_strike:g}"
     )
 
     print(
         f"DTE ANALYSIS : "
-        f"1 ~ {max_dte}"
+        f"1~{max_dte}"
     )
 
     print(
@@ -3866,14 +3280,7 @@ def main():
     # 2. NORMALIZE
     # ========================================================
 
-    data = normalize(
-        raw
-    )
-
-    print(
-        f"Normalized rows: "
-        f"{len(data):,}"
-    )
+    data = normalize(raw)
 
     # ========================================================
     # 3. FILTER
@@ -3906,8 +3313,13 @@ def main():
     # ========================================================
 
     strike_table = (
-        build_strike_table(
-            data
+        build_strike_table(data)
+    )
+
+    key_price_structure = (
+        build_key_price_structure(
+            data,
+            spot
         )
     )
 
@@ -3931,110 +3343,44 @@ def main():
     )
 
     top_contracts = (
-        build_top_contracts(
-            data
-        )
+        build_top_contracts(data)
     )
-
-    # ========================================================
-    # STRUCTURE DEBUG
-    # ========================================================
-
-    print()
-    print("=" * 70)
-    print("STRUCTURE CHECK")
-    print("=" * 70)
-
-    print(
-        f"Strike rows: "
-        f"{len(strike_table):,}"
-    )
-
-    print(
-        f"Expiration rows: "
-        f"{len(expiration_structure):,}"
-    )
-
-    print(
-        f"Strike × Expiration rows: "
-        f"{len(strike_expiration):,}"
-    )
-
-    print(
-        f"Key Strike rows: "
-        f"{len(key_strike_summary):,}"
-    )
-
-    print(
-        f"Top Contracts rows: "
-        f"{len(top_contracts):,}"
-    )
-
-    if expiration_structure.empty:
-
-        print(
-            "⚠️ WARNING: "
-            "expiration_structure is EMPTY"
-        )
-
-    else:
-
-        print(
-            "✅ expiration_structure OK"
-        )
-
-    if strike_expiration.empty:
-
-        print(
-            "⚠️ WARNING: "
-            "strike_expiration is EMPTY"
-        )
-
-    else:
-
-        print(
-            "✅ strike_expiration OK"
-        )
 
     # ========================================================
     # 6. SUMMARY
     # ========================================================
 
     calls = data[
-        data["option_type"]
-        ==
-        "CALL"
+        data["option_type"] == "CALL"
     ]
 
     puts = data[
-        data["option_type"]
-        ==
-        "PUT"
+        data["option_type"] == "PUT"
     ]
 
-    cv = safe_sum(
-        calls["volume"]
-    )
+    cv = calls[
+        "volume"
+    ].fillna(0).sum()
 
-    pv = safe_sum(
-        puts["volume"]
-    )
+    pv = puts[
+        "volume"
+    ].fillna(0).sum()
 
-    coi = safe_sum(
-        calls["openInterest"]
-    )
+    coi = calls[
+        "openInterest"
+    ].fillna(0).sum()
 
-    poi = safe_sum(
-        puts["openInterest"]
-    )
+    poi = puts[
+        "openInterest"
+    ].fillna(0).sum()
 
-    cp = safe_sum(
-        calls["premium_proxy"]
-    )
+    cp = calls[
+        "premium_proxy"
+    ].fillna(0).sum()
 
-    pp = safe_sum(
-        puts["premium_proxy"]
-    )
+    pp = puts[
+        "premium_proxy"
+    ].fillna(0).sum()
 
     tgex = calls["gex"].sum(
         min_count=1
@@ -4049,9 +3395,7 @@ def main():
         and np.isfinite(pgex)
     ):
 
-        net_gex = (
-            tgex + pgex
-        )
+        net_gex = tgex + pgex
 
     elif np.isfinite(tgex):
 
@@ -4068,11 +3412,8 @@ def main():
     summary = pd.DataFrame(
         [
             {
-                "symbol":
-                    symbol,
-
-                "spot":
-                    spot,
+                "symbol": symbol,
+                "spot": spot,
 
                 "min_strike":
                     min_strike,
@@ -4105,34 +3446,22 @@ def main():
                     pp,
 
                 "call_volume_ratio":
-                    cv
-                    /
-                    (cv + pv)
-                    *
-                    100
+                    cv / (cv + pv) * 100
                     if cv + pv > 0
                     else np.nan,
 
                 "call_oi_ratio":
-                    coi
-                    /
-                    (coi + poi)
-                    *
-                    100
+                    coi / (coi + poi) * 100
                     if coi + poi > 0
                     else np.nan,
 
                 "call_volume_oi":
-                    cv
-                    /
-                    coi
+                    cv / coi
                     if coi > 0
                     else np.nan,
 
                 "put_volume_oi":
-                    pv
-                    /
-                    poi
+                    pv / poi
                     if poi > 0
                     else np.nan,
 
@@ -4158,6 +3487,7 @@ def main():
         expiration_structure=expiration_structure,
         strike_expiration=strike_expiration,
         key_strike_summary=key_strike_summary,
+        key_price_structure=key_price_structure,
         top_contracts=top_contracts,
         spot=spot,
         symbol=symbol,
@@ -4177,6 +3507,7 @@ def main():
         expiration_structure=expiration_structure,
         strike_expiration=strike_expiration,
         key_strike_summary=key_strike_summary,
+        key_price_structure=key_price_structure,
         top_contracts=top_contracts,
         summary=summary,
         report=report,
@@ -4188,22 +3519,16 @@ def main():
     # ========================================================
 
     print()
-    print(
-        report
-    )
+    print(report)
 
     # ========================================================
     # 10. TELEGRAM
     #
-    # 중요:
-    # send_telegram()이 실패하면 RuntimeError가 발생하고
-    # 아래 except에서 다시 raise되므로
-    # GitHub Actions가 FAILED가 된다.
+    # Telegram 실패하면 여기서 RuntimeError 발생.
+    # 따라서 GitHub Actions도 FAILED 처리됨.
     # ========================================================
 
-    send_telegram(
-        report
-    )
+    send_telegram(report)
 
     # ========================================================
     # COMPLETE
@@ -4234,14 +3559,11 @@ if __name__ == "__main__":
 
     except KeyboardInterrupt:
 
-        print()
         print(
-            "⚠️ Scanner interrupted."
+            "Scanner interrupted."
         )
 
-        sys.exit(
-            130
-        )
+        sys.exit(130)
 
     except Exception as exc:
 
@@ -4261,10 +3583,5 @@ if __name__ == "__main__":
             f"Error: "
             f"{repr(exc)}"
         )
-
-        # ====================================================
-        # 중요:
-        # GitHub Actions에서 반드시 실패 처리
-        # ====================================================
 
         sys.exit(1)
