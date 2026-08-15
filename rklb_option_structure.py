@@ -1,3 +1,4 @@
+
 import os
 import sys
 import time
@@ -64,16 +65,21 @@ FOCUS_STRIKES = [
 ]
 
 
-# ------------------------------------------------------------
+# ============================================================
 # BAR CONFIG
-# ------------------------------------------------------------
+# ============================================================
 
+# 최대 바 길이
 BAR_WIDTH = 10
 
+# 최소 실제 바 길이
+# 전체 규모가 작으면 10칸보다 짧아진다.
+BAR_MIN_WIDTH = 1
 
-# ------------------------------------------------------------
+
+# ============================================================
 # DIRECTORY
-# ------------------------------------------------------------
+# ============================================================
 
 os.makedirs(
     OUTPUT_DIR,
@@ -81,9 +87,9 @@ os.makedirs(
 )
 
 
-# ------------------------------------------------------------
+# ============================================================
 # TIMEZONE
-# ------------------------------------------------------------
+# ============================================================
 
 US_EASTERN = ZoneInfo(
     "America/New_York"
@@ -219,21 +225,240 @@ def fmt_iv(value):
 
 
 # ============================================================
-# ⭐ CALL / PUT BAR
+# ⭐ DYNAMIC CALL / PUT BAR
 #
 # 최대 10칸
 #
-# CALL = 🟩
-# PUT  = 🟥
+# 중요한 변경:
+#
+# 기존:
+#
+# 항상 10칸
+#
+# 변경:
+#
+# 전체 규모가 작으면 바 자체가 짧아진다.
 #
 # 예:
 #
-# C 26,416 / P 2,297
-# 🟩🟩🟩🟩🟩🟩🟩🟩🟩🟥
+# 가장 큰 값
+# C 100 / P 100
+# → 🟩🟩🟩🟩🟩🟥🟥🟥🟥🟥
 #
-# C 7,723 / P 14,778
-# 🟩🟩🟥🟥🟥🟥🟥🟥🟥🟥
+# 작은 값
+# C 10 / P 5
+# → 🟩🟩🟥
 #
+# 아주 작은 값
+# C 1 / P 1
+# → 🟩🟥
+#
+# ============================================================
+
+def make_dynamic_dual_bar(
+    call_value,
+    put_value,
+    reference_total,
+    max_width=BAR_WIDTH
+):
+
+    call_value = safe_float(
+        call_value
+    )
+
+    put_value = safe_float(
+        put_value
+    )
+
+    reference_total = safe_float(
+        reference_total
+    )
+
+    # --------------------------------------------------------
+    # 잘못된 값 처리
+    # --------------------------------------------------------
+
+    if (
+        not np.isfinite(call_value)
+        or call_value < 0
+    ):
+
+        call_value = 0.0
+
+    if (
+        not np.isfinite(put_value)
+        or put_value < 0
+    ):
+
+        put_value = 0.0
+
+    if (
+        not np.isfinite(reference_total)
+        or reference_total <= 0
+    ):
+
+        reference_total = 0.0
+
+    total = (
+        call_value
+        +
+        put_value
+    )
+
+    # --------------------------------------------------------
+    # 데이터 자체가 없는 경우
+    # --------------------------------------------------------
+
+    if total <= 0:
+
+        return "·"
+
+    # --------------------------------------------------------
+    # 기준 전체 규모 대비 바 길이
+    #
+    # reference_total = 해당 구조에서 가장 큰 전체값
+    #
+    # 최대값 → 10칸
+    # 절반 → 5칸
+    # 10% → 1칸
+    # --------------------------------------------------------
+
+    if reference_total > 0:
+
+        scale_ratio = (
+            total
+            /
+            reference_total
+        )
+
+    else:
+
+        scale_ratio = 1.0
+
+    scale_ratio = max(
+        0.0,
+        min(
+            scale_ratio,
+            1.0
+        )
+    )
+
+    # --------------------------------------------------------
+    # 실제 바 길이
+    # --------------------------------------------------------
+
+    bar_length = int(
+        round(
+            scale_ratio
+            *
+            max_width
+        )
+    )
+
+    # 값이 실제로 존재하면 최소 1칸
+    if bar_length < BAR_MIN_WIDTH:
+
+        bar_length = BAR_MIN_WIDTH
+
+    bar_length = min(
+        bar_length,
+        max_width
+    )
+
+    # --------------------------------------------------------
+    # CALL 비율
+    # --------------------------------------------------------
+
+    call_ratio = (
+        call_value
+        /
+        total
+    )
+
+    call_width = int(
+        round(
+            call_ratio
+            *
+            bar_length
+        )
+    )
+
+    put_width = (
+        bar_length
+        -
+        call_width
+    )
+
+    # --------------------------------------------------------
+    # CALL / PUT 둘 다 존재하면
+    # 최소 1칸씩
+    # --------------------------------------------------------
+
+    if (
+        call_value > 0
+        and put_value > 0
+    ):
+
+        if call_width <= 0:
+
+            call_width = 1
+
+            put_width = (
+                bar_length
+                -
+                1
+            )
+
+        elif put_width <= 0:
+
+            put_width = 1
+
+            call_width = (
+                bar_length
+                -
+                1
+            )
+
+    # --------------------------------------------------------
+    # 안전 보정
+    # --------------------------------------------------------
+
+    call_width = max(
+        0,
+        min(
+            call_width,
+            bar_length
+        )
+    )
+
+    put_width = max(
+        0,
+        min(
+            put_width,
+            bar_length
+            -
+            call_width
+        )
+    )
+
+    # --------------------------------------------------------
+    # 최종 BAR
+    # --------------------------------------------------------
+
+    return (
+        "🟩" * call_width
+        +
+        "🟥" * put_width
+    )
+
+
+# ============================================================
+# BACKWARD COMPATIBILITY
+#
+# 기존 함수 이름을 유지한다.
+#
+# 단, reference_total이 없으면
+# call + put 자체를 기준으로 한다.
 # ============================================================
 
 def make_dual_bar(
@@ -255,14 +480,14 @@ def make_dual_bar(
         or call_value < 0
     ):
 
-        call_value = 0
+        call_value = 0.0
 
     if (
         not np.isfinite(put_value)
         or put_value < 0
     ):
 
-        put_value = 0
+        put_value = 0.0
 
     total = (
         call_value
@@ -270,82 +495,11 @@ def make_dual_bar(
         put_value
     )
 
-    if total <= 0:
-
-        return "·" * width
-
-    # --------------------------------------------------------
-    # CALL 비율
-    # --------------------------------------------------------
-
-    call_ratio = (
-        call_value
-        /
-        total
-    )
-
-    call_width = int(
-        round(
-            call_ratio
-            *
-            width
-        )
-    )
-
-    put_width = (
-        width
-        -
-        call_width
-    )
-
-    # --------------------------------------------------------
-    # 양쪽 값이 실제로 존재하면
-    # 최소 1칸 보장
-    # --------------------------------------------------------
-
-    if (
-        call_value > 0
-        and put_value > 0
-    ):
-
-        if call_width <= 0:
-
-            call_width = 1
-            put_width = (
-                width - 1
-            )
-
-        elif put_width <= 0:
-
-            put_width = 1
-            call_width = (
-                width - 1
-            )
-
-    # --------------------------------------------------------
-    # 안전 보정
-    # --------------------------------------------------------
-
-    call_width = max(
-        0,
-        min(
-            call_width,
-            width
-        )
-    )
-
-    put_width = max(
-        0,
-        min(
-            put_width,
-            width - call_width
-        )
-    )
-
-    return (
-        "🟩" * call_width
-        +
-        "🟥" * put_width
+    return make_dynamic_dual_bar(
+        call_value,
+        put_value,
+        total,
+        max_width=width
     )
 
 
@@ -356,12 +510,14 @@ def make_dual_bar(
 def make_dual_bar_line(
     call_value,
     put_value,
+    reference_total,
     width=BAR_WIDTH
 ):
 
-    bar = make_dual_bar(
+    bar = make_dynamic_dual_bar(
         call_value,
         put_value,
+        reference_total,
         width
     )
 
@@ -476,10 +632,6 @@ def get_current_price(
 
             return manual_price
 
-    # --------------------------------------------------------
-    # 1 MINUTE
-    # --------------------------------------------------------
-
     try:
 
         history = ticker.history(
@@ -517,10 +669,6 @@ def get_current_price(
             "1m price error:",
             repr(exc)
         )
-
-    # --------------------------------------------------------
-    # 5 DAY FALLBACK
-    # --------------------------------------------------------
 
     try:
 
@@ -1209,15 +1357,7 @@ def build_strike_table(
 
 
 # ============================================================
-# ⭐ BAR STRUCTURE
-#
-# IMPORTANT:
-# 이 함수는 저장된 strike_table을 이용한다.
-#
-# OI / VOLUME / PREMIUM 각각
-# CALL+PUT 비율을 최대 10칸으로 표시.
-#
-# 숫자는 반드시 옆에 표시.
+# ⭐ DYNAMIC BAR STRUCTURE
 # ============================================================
 
 def build_bar_structure(
@@ -1229,6 +1369,65 @@ def build_bar_structure(
         return []
 
     lines = []
+
+    sorted_table = (
+        strike_table
+        .sort_values(
+            "strike"
+        )
+        .reset_index(
+            drop=True
+        )
+    )
+
+    # ========================================================
+    # 기준값 계산
+    #
+    # 각각의 구조에서 가장 큰 규모를 10칸으로 사용
+    # ========================================================
+
+    oi_reference = (
+        (
+            sorted_table[
+                "call_oi"
+            ].fillna(0)
+            +
+            sorted_table[
+                "put_oi"
+            ].fillna(0)
+        )
+        .max()
+    )
+
+    volume_reference = (
+        (
+            sorted_table[
+                "call_volume"
+            ].fillna(0)
+            +
+            sorted_table[
+                "put_volume"
+            ].fillna(0)
+        )
+        .max()
+    )
+
+    premium_reference = (
+        (
+            sorted_table[
+                "call_premium"
+            ].fillna(0)
+            +
+            sorted_table[
+                "put_premium"
+            ].fillna(0)
+        )
+        .max()
+    )
+
+    # ========================================================
+    # HEADER
+    # ========================================================
 
     lines.append(
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -1247,6 +1446,10 @@ def build_bar_structure(
     )
 
     lines.append(
+        "📐 규모가 작으면 BAR도 짧게 표시"
+    )
+
+    lines.append(
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     )
 
@@ -1261,10 +1464,7 @@ def build_bar_structure(
     lines.append("")
 
     for _, row in (
-        strike_table
-        .sort_values(
-            "strike"
-        )
+        sorted_table
         .iterrows()
     ):
 
@@ -1272,12 +1472,37 @@ def build_bar_structure(
             "strike"
         ]
 
+        call_oi = safe_float(
+            row["call_oi"]
+        )
+
+        put_oi = safe_float(
+            row["put_oi"]
+        )
+
+        total = (
+            max(
+                0,
+                call_oi
+                if np.isfinite(call_oi)
+                else 0
+            )
+            +
+            max(
+                0,
+                put_oi
+                if np.isfinite(put_oi)
+                else 0
+            )
+        )
+
         lines.append(
             f"🎯 ${strike:g}   "
             +
             make_dual_bar_line(
-                row["call_oi"],
-                row["put_oi"]
+                call_oi,
+                put_oi,
+                oi_reference
             )
         )
 
@@ -1294,10 +1519,7 @@ def build_bar_structure(
     lines.append("")
 
     for _, row in (
-        strike_table
-        .sort_values(
-            "strike"
-        )
+        sorted_table
         .iterrows()
     ):
 
@@ -1305,12 +1527,21 @@ def build_bar_structure(
             "strike"
         ]
 
+        call_volume = safe_float(
+            row["call_volume"]
+        )
+
+        put_volume = safe_float(
+            row["put_volume"]
+        )
+
         lines.append(
             f"🎯 ${strike:g}   "
             +
             make_dual_bar_line(
-                row["call_volume"],
-                row["put_volume"]
+                call_volume,
+                put_volume,
+                volume_reference
             )
         )
 
@@ -1327,10 +1558,7 @@ def build_bar_structure(
     lines.append("")
 
     for _, row in (
-        strike_table
-        .sort_values(
-            "strike"
-        )
+        sorted_table
         .iterrows()
     ):
 
@@ -1358,9 +1586,10 @@ def build_bar_structure(
 
             put_premium = 0
 
-        bar = make_dual_bar(
+        bar = make_dynamic_dual_bar(
             call_premium,
-            put_premium
+            put_premium,
+            premium_reference
         )
 
         lines.append(
@@ -2928,10 +3157,6 @@ def save_outputs(
         exist_ok=True
     )
 
-    # --------------------------------------------------------
-    # FILE PATHS
-    # --------------------------------------------------------
-
     files = {
         "contracts.csv":
             data,
@@ -2962,10 +3187,6 @@ def save_outputs(
     print("SAVE OUTPUTS")
     print("=" * 70)
 
-    # --------------------------------------------------------
-    # CSV SAVE
-    # --------------------------------------------------------
-
     for filename, dataframe in (
         files.items()
     ):
@@ -2988,10 +3209,6 @@ def save_outputs(
             f"💾 {filename:40s} "
             f"rows={len(dataframe):,}"
         )
-
-    # --------------------------------------------------------
-    # REPORT
-    # --------------------------------------------------------
 
     report_path = os.path.join(
         output_dir,
@@ -3016,10 +3233,6 @@ def save_outputs(
         f"💾 {'report.md':40s} "
         f"chars={len(report):,}"
     )
-
-    # --------------------------------------------------------
-    # SAVE MANIFEST
-    # --------------------------------------------------------
 
     manifest_path = os.path.join(
         output_dir,
@@ -3055,10 +3268,6 @@ def save_outputs(
             file.write(
                 f"{os.path.basename(path)}\n"
             )
-
-    # --------------------------------------------------------
-    # VERIFY
-    # --------------------------------------------------------
 
     print()
     print(
@@ -3189,7 +3398,12 @@ def main():
 
     print(
         f"BAR WIDTH    : "
-        f"{BAR_WIDTH}"
+        f"{BAR_WIDTH} MAX"
+    )
+
+    print(
+        "BAR SCALE    : "
+        "MAX SIZE = 10 / SMALL SIZE = SHORTER"
     )
 
     print(
