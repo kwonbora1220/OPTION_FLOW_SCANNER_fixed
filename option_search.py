@@ -420,7 +420,7 @@ def find_previous_oi_snapshot(
 ):
 
     if current_date is None:
-        current_date = date.today()
+        current_date = get_us_market_date()
 
     pattern = os.path.join(
         OI_HISTORY_DIR,
