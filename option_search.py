@@ -573,7 +573,18 @@ def calculate_oi_delta(
         # CURRENT DATA + PREVIOUS OI
         # ----------------------------------------------------
 
+
         current_df = df.copy()
+
+        # calculate_oi_delta() 시작부에서 초기화한
+        # helper column이 merge 대상과 충돌하지 않도록 제거한다.
+        current_df = current_df.drop(
+            columns=[
+                "previous_openInterest",
+                "oi_delta"
+            ],
+            errors="ignore"
+        )
 
         current_df["expiration"] = (
             current_df["expiration"]
@@ -581,6 +592,8 @@ def calculate_oi_delta(
             .str.strip()
         )
 
+
+        
         current_df["option_type"] = (
             current_df["option_type"]
             .astype(str)
