@@ -11,6 +11,12 @@ import pandas as pd
 from datetime import datetime, date
 from zoneinfo import ZoneInfo
 
+def get_us_market_date():
+
+    return datetime.now(
+        ZoneInfo("America/New_York")
+    ).date()
+
 
 # ============================================================
 # CONFIG
