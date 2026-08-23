@@ -306,7 +306,7 @@ def get_oi_snapshot_path(
 ):
 
     if snapshot_date is None:
-        snapshot_date = date.today()
+        snapshot_date = get_us_market_date()
 
     return os.path.join(
         OI_HISTORY_DIR,
