@@ -4,7 +4,7 @@
 
 SELECTED_SYMBOLS = [
     "SOXX",
-    "AVGO",
-    "NVDA",
-    "MRVL",
+    "TSLA",
+    "IREN",
+    "RKLB",
 ]
