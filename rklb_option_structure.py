@@ -30,7 +30,7 @@ DEFAULT_PRICE = os.getenv(
 MIN_STRIKE = float(
     os.getenv(
         "MIN_STRIKE",
-        "80"
+        "60"
     )
 )
 
@@ -44,7 +44,7 @@ MAX_STRIKE = float(
 MAX_DTE = int(
     os.getenv(
         "MAX_DTE",
-        "180"
+        "365"
     )
 )
 
