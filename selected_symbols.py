@@ -4,9 +4,9 @@
 
 SELECTED_SYMBOLS = [
     "SOXX",
-    "MU",
-    "CVS",
-    "AMD",
+    "AVGO",
+    "NVDA",
+    "MRVL",
     "PLTR",
     "CRWV",
     "APP",
