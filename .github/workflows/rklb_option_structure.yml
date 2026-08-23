@@ -90,9 +90,9 @@ jobs:
         run: |
 
           SYMBOL="${INPUT_SYMBOL:-RKLB}"
-          MIN_STRIKE="${INPUT_MIN_STRIKE:-80}"
+          MIN_STRIKE="${INPUT_MIN_STRIKE:-60}"
           MAX_STRIKE="${INPUT_MAX_STRIKE:-100}"
-          MAX_DTE="${INPUT_MAX_DTE:-180}"
+          MAX_DTE="${INPUT_MAX_DTE:-365}"
 
           echo "SYMBOL=$SYMBOL" >> "$GITHUB_ENV"
           echo "MIN_STRIKE=$MIN_STRIKE" >> "$GITHUB_ENV"
