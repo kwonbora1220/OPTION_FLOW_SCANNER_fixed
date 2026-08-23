@@ -21,7 +21,7 @@ on:
       max_dte:
         description: "Maximum DTE"
         required: true
-        default: "180"
+        default: "365"
 
   schedule:
     - cron: "30 22 * * 1-5"
