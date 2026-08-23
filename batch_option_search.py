@@ -12,7 +12,6 @@ from option_search import (
 
 from oi_history import (
     calculate_oi_change,
-    save_oi_snapshot,
     format_oi_change
 )
 
