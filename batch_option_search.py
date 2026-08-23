@@ -1761,11 +1761,6 @@ def main():
                 ] = oi_change
 
 
-                # 현재 OI 저장
-                save_oi_snapshot(
-                    ticker,
-                    analysis["df"]
-                )
 
 
                 print(
