@@ -11,7 +11,7 @@ on:
       min_strike:
         description: "Minimum strike"
         required: true
-        default: "80"
+        default: "60"
 
       max_strike:
         description: "Maximum strike"
