@@ -7,7 +7,7 @@ SELECTED_SYMBOLS = [
     "AVGO",
     "NVDA",
     "MRVL",
-    "PLTR",
+    "ASTS",
     "CRWV",
     "APP",
     "DRAM",
