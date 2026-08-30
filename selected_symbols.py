@@ -3,13 +3,13 @@
 # ============================================================
 
 SELECTED_SYMBOLS = [
-    "SOXX",
+    "DKNG",
     "AVGO",
     "NVDA",
     "MRVL",
     "ASTS",
     "CRWV",
-    "APP",
+    "PL",
     "DRAM",
     "SKHY",
     "CRDO",
