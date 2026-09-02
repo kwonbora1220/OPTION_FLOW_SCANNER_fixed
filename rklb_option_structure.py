@@ -30,7 +30,7 @@ DEFAULT_PRICE = os.getenv(
 MIN_STRIKE = float(
     os.getenv(
         "MIN_STRIKE",
-        "60"
+        "50"
     )
 )
 
@@ -59,12 +59,13 @@ OUTPUT_DIR = os.getenv(
 # ============================================================
 
 FOCUS_STRIKES = [
-    0.8,
-    0.9,
-    1,
-    1.2,
-    2,
-    4
+    50,
+    55,
+    60,
+    65,
+    70,
+    80,
+    90
 ]
 
 
