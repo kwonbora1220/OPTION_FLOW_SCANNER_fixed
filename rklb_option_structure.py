@@ -35,9 +35,13 @@ def fetch_option_data(symbol):
         hist = ticker_obj.history(period="1d")
         spot_price = hist['Close'].iloc[-1] if not hist.empty else 0.0
 
-    expirations = ticker_obj.expirations
+    # yfinance 버전 이슈 대응 (expirations -> options)
+    expirations = getattr(ticker_obj, 'options', None)
+    if expirations is None or len(expirations) == 0:
+        expirations = getattr(ticker_obj, 'expirations', ())
+
     if not expirations:
-        print("옵션 데이터를 불러올 수 없습니다.")
+        print("옵션 만기일 데이터를 불러올 수 없습니다.")
         return spot_price, pd.DataFrame()
 
     today = datetime.datetime.now().date()
