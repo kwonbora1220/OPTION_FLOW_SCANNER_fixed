@@ -3003,7 +3003,6 @@ def _add_horizontal_bar_labels(
                 zorder=20
             )
 
-
 # ============================================================
 # DASHBOARD IMAGE
 # ============================================================
@@ -3221,9 +3220,9 @@ def build_dashboard_image(
             0.72,
             0.82,
             2.0,
-            2.0,
-            1.75,
-            2.25,
+            2.15,
+            2.15,
+            2.45,
             0.75
         ],
         hspace=0.34
@@ -3416,18 +3415,14 @@ def build_dashboard_image(
 
         high = max(
             high,
-            float(
-                call_wall["strike"]
-            )
+            float(call_wall["strike"])
         )
 
     if put_wall is not None:
 
         low = min(
             low,
-            float(
-                put_wall["strike"]
-            )
+            float(put_wall["strike"])
         )
 
     span = max(
@@ -3505,7 +3500,8 @@ def build_dashboard_image(
             ha="center",
             va="center",
             fontsize=9,
-            fontweight="bold"
+            fontweight="bold",
+            color="white"
         )
 
     if call_wall is not None:
@@ -3531,7 +3527,8 @@ def build_dashboard_image(
             ha="center",
             va="center",
             fontsize=9,
-            fontweight="bold"
+            fontweight="bold",
+            color="white"
         )
 
     for x in focus_present:
@@ -3549,7 +3546,8 @@ def build_dashboard_image(
             f"${x:g}",
             ha="center",
             va="top",
-            fontsize=8
+            fontsize=8,
+            color="white"
         )
 
     ax.set_xticks(
@@ -3561,9 +3559,24 @@ def build_dashboard_image(
         )
     )
 
+    ax.set_xticklabels(
+        [
+            f"${x:g}"
+            for x in sorted(
+                set(
+                    float(x)
+                    for x in strikes["strike"]
+                )
+            )
+        ],
+        color="white",
+        fontsize=7
+    )
+
     ax.tick_params(
         axis="x",
-        labelsize=7
+        labelsize=7,
+        colors="white"
     )
 
     for spine in ax.spines.values():
@@ -3592,8 +3605,7 @@ def build_dashboard_image(
     )
 
     # --------------------------------------------------------
-    # IMPORTANT:
-    # These are the actual Y coordinates used by barh()
+    # ACTUAL STRIKE Y POSITIONS
     # --------------------------------------------------------
 
     y = strikes[
@@ -3645,7 +3657,10 @@ def build_dashboard_image(
 
         bar_h = 0.2
 
-    # PUT = negative / left
+    # --------------------------------------------------------
+    # BARS
+    # --------------------------------------------------------
+
     ax.barh(
         y,
         -p_oi,
@@ -3654,7 +3669,6 @@ def build_dashboard_image(
         label="PUT OI"
     )
 
-    # CALL = positive / right
     ax.barh(
         y,
         c_oi,
@@ -3674,12 +3688,34 @@ def build_dashboard_image(
         alpha=0.7
     )
 
-    # ========================================================
-    # OI NUMERIC LABELS
-    # ========================================================
-    # FIX:
-    # Pass y into helper so labels use actual strike positions.
-    # ========================================================
+    # --------------------------------------------------------
+    # STRIKE PRICE LABELS
+    # --------------------------------------------------------
+
+    ax.set_yticks(
+        y
+    )
+
+    ax.set_yticklabels(
+        [
+            f"${s:g}"
+            for s in y
+        ],
+        fontsize=8,
+        fontweight="bold",
+        color="white"
+    )
+
+    ax.tick_params(
+        axis="y",
+        colors="white",
+        labelsize=8,
+        pad=5
+    )
+
+    # --------------------------------------------------------
+    # OI NUMBERS
+    # --------------------------------------------------------
 
     _add_horizontal_bar_labels(
         ax,
@@ -3699,19 +3735,16 @@ def build_dashboard_image(
         offset_ratio=0.012
     )
 
-    # ========================================================
+    # --------------------------------------------------------
     # OI X RANGE
-    # ========================================================
+    # --------------------------------------------------------
 
     oi_max = max(
-        np.nanmax(
-            p_oi
-        )
+        np.nanmax(p_oi)
         if len(p_oi)
         else 0,
-        np.nanmax(
-            c_oi
-        )
+
+        np.nanmax(c_oi)
         if len(c_oi)
         else 0
     )
@@ -3722,7 +3755,7 @@ def build_dashboard_image(
     ):
 
         oi_margin = (
-            oi_max * 0.18
+            oi_max * 0.20
         )
 
         ax.set_xlim(
@@ -3736,8 +3769,9 @@ def build_dashboard_image(
     )
 
     ax.tick_params(
-        axis="both",
-        labelsize=8
+        axis="x",
+        labelsize=8,
+        colors="white"
     )
 
     ax.legend(
@@ -3797,7 +3831,10 @@ def build_dashboard_image(
         )
     )
 
-    # PUT = negative / left
+    # --------------------------------------------------------
+    # BARS
+    # --------------------------------------------------------
+
     ax.barh(
         y,
         -p_vol,
@@ -3806,7 +3843,6 @@ def build_dashboard_image(
         label="PUT VOL"
     )
 
-    # CALL = positive / right
     ax.barh(
         y,
         c_vol,
@@ -3826,12 +3862,34 @@ def build_dashboard_image(
         alpha=0.7
     )
 
-    # ========================================================
-    # VOLUME NUMERIC LABELS
-    # ========================================================
-    # FIX:
-    # Pass y into helper so labels use actual strike positions.
-    # ========================================================
+    # --------------------------------------------------------
+    # STRIKE PRICE LABELS
+    # --------------------------------------------------------
+
+    ax.set_yticks(
+        y
+    )
+
+    ax.set_yticklabels(
+        [
+            f"${s:g}"
+            for s in y
+        ],
+        fontsize=8,
+        fontweight="bold",
+        color="white"
+    )
+
+    ax.tick_params(
+        axis="y",
+        colors="white",
+        labelsize=8,
+        pad=5
+    )
+
+    # --------------------------------------------------------
+    # VOLUME NUMBERS
+    # --------------------------------------------------------
 
     _add_horizontal_bar_labels(
         ax,
@@ -3851,19 +3909,16 @@ def build_dashboard_image(
         offset_ratio=0.012
     )
 
-    # ========================================================
+    # --------------------------------------------------------
     # VOLUME X RANGE
-    # ========================================================
+    # --------------------------------------------------------
 
     vol_max = max(
-        np.nanmax(
-            p_vol
-        )
+        np.nanmax(p_vol)
         if len(p_vol)
         else 0,
-        np.nanmax(
-            c_vol
-        )
+
+        np.nanmax(c_vol)
         if len(c_vol)
         else 0
     )
@@ -3874,7 +3929,7 @@ def build_dashboard_image(
     ):
 
         vol_margin = (
-            vol_max * 0.18
+            vol_max * 0.20
         )
 
         ax.set_xlim(
@@ -3888,8 +3943,9 @@ def build_dashboard_image(
     )
 
     ax.tick_params(
-        axis="both",
-        labelsize=8
+        axis="x",
+        labelsize=8,
+        colors="white"
     )
 
     ax.legend(
@@ -3934,6 +3990,10 @@ def build_dashboard_image(
         va="top"
     )
 
+    # ========================================================
+    # EXPIRATION OI
+    # ========================================================
+
     exp = (
         expiration_structure.copy()
     )
@@ -3950,13 +4010,34 @@ def build_dashboard_image(
             .copy()
         )
 
-        labels = (
-            exp[
-                "expiration"
-            ]
-            .astype(str)
-            .tolist()
-        )
+        # ----------------------------------------------------
+        # EXPIRATION LABEL FORMAT
+        # ----------------------------------------------------
+
+        labels = []
+
+        for _, row in exp.iterrows():
+
+            expiration = str(
+                row["expiration"]
+            )
+
+            dte = safe_float(
+                row["DTE"]
+            )
+
+            if np.isfinite(dte):
+
+                labels.append(
+                    f"{expiration}  "
+                    f"(DTE {int(dte)})"
+                )
+
+            else:
+
+                labels.append(
+                    expiration
+                )
 
         vals = (
             exp[
@@ -3982,7 +4063,7 @@ def build_dashboard_image(
             [
                 0.01,
                 0.08,
-                0.47,
+                0.49,
                 0.76
             ]
         )
@@ -3995,11 +4076,20 @@ def build_dashboard_image(
             len(labels)
         )
 
+        # ----------------------------------------------------
+        # EXPIRATION BARS
+        # ----------------------------------------------------
+
         exp_ax.barh(
             yy,
             vals,
+            height=0.62,
             alpha=0.85
         )
+
+        # ----------------------------------------------------
+        # EXPIRATION DATE LABELS
+        # ----------------------------------------------------
 
         exp_ax.set_yticks(
             yy
@@ -4007,24 +4097,61 @@ def build_dashboard_image(
 
         exp_ax.set_yticklabels(
             labels,
-            fontsize=7
+            fontsize=7.5,
+            fontweight="bold",
+            color="white"
+        )
+
+        exp_ax.tick_params(
+            axis="y",
+            colors="white",
+            labelsize=7.5,
+            pad=4
         )
 
         exp_ax.invert_yaxis()
 
-        exp_ax.tick_params(
-            axis="x",
-            labelsize=7
-        )
+        # ----------------------------------------------------
+        # EXPIRATION VALUE LABELS
+        # ----------------------------------------------------
 
-        exp_ax.grid(
-            axis="x",
-            alpha=0.12
-        )
+        finite_exp_vals = vals[
+            np.isfinite(vals)
+        ]
 
-        for spine in exp_ax.spines.values():
+        if len(finite_exp_vals) > 0:
 
-            spine.set_visible(False)
+            exp_max = np.max(
+                finite_exp_vals
+            )
+
+        else:
+
+            exp_max = 0
+
+        if (
+            np.isfinite(exp_max)
+            and exp_max > 0
+        ):
+
+            exp_offset = max(
+                exp_max * 0.018,
+                1
+            )
+
+            exp_ax.set_xlim(
+                0,
+                exp_max * 1.28
+            )
+
+        else:
+
+            exp_offset = 1
+
+            exp_ax.set_xlim(
+                0,
+                1
+            )
 
         for idx, (
             v,
@@ -4036,18 +4163,64 @@ def build_dashboard_image(
             )
         ):
 
-            exp_ax.text(
-                v,
-                idx,
-                (
-                    f"  "
+            if (
+                not np.isfinite(v)
+                or v <= 0
+            ):
+                continue
+
+            if np.isfinite(c):
+
+                label = (
                     f"{_dashboard_num(v)}"
-                    f" ({c:.1f}%)"
-                ),
+                    f"  ({c:.1f}%)"
+                )
+
+            else:
+
+                label = (
+                    f"{_dashboard_num(v)}"
+                )
+
+            exp_ax.text(
+                v + exp_offset,
+                idx,
+                label,
                 va="center",
-                fontsize=7,
-                clip_on=False
+                ha="left",
+                fontsize=7.5,
+                fontweight="bold",
+                color="white",
+                clip_on=False,
+                zorder=20
             )
+
+        exp_ax.grid(
+            axis="x",
+            alpha=0.12
+        )
+
+        exp_ax.tick_params(
+            axis="x",
+            labelsize=7,
+            colors="white"
+        )
+
+        for spine in exp_ax.spines.values():
+
+            spine.set_visible(False)
+
+    else:
+
+        ax.text(
+            0.03,
+            0.50,
+            "⚠️ EXPIRATION DATA N/A",
+            transform=ax.transAxes,
+            color="#9ca3af",
+            fontsize=9,
+            va="center"
+        )
 
     # ========================================================
     # KEY STRIKE SUMMARY
@@ -4073,6 +4246,33 @@ def build_dashboard_image(
             .iterrows()
         ):
 
+            top_exp = str(
+                row["top_expiration"]
+            )
+
+            top_dte = safe_float(
+                row["top_DTE"]
+            )
+
+            if np.isfinite(top_dte):
+
+                top_exp_display = (
+                    f"{top_exp}\n"
+                    f"DTE {int(top_dte)}"
+                )
+
+            else:
+
+                top_exp_display = (
+                    top_exp
+                )
+
+            top_pct = safe_float(
+                row[
+                    "top_expiration_oi_pct"
+                ]
+            )
+
             rows.append(
                 [
                     f"${row['strike']:g}",
@@ -4089,13 +4289,13 @@ def build_dashboard_image(
                         row["put_oi"]
                     ),
 
-                    str(
-                        row[
-                            "top_expiration"
-                        ]
-                    ),
+                    top_exp_display,
 
-                    f"{safe_float(row['top_expiration_oi_pct']):.1f}%"
+                    (
+                        f"{top_pct:.1f}%"
+                        if np.isfinite(top_pct)
+                        else "N/A"
+                    )
                 ]
             )
 
@@ -4154,6 +4354,21 @@ def build_dashboard_image(
             cell.get_text().set_color(
                 "white"
             )
+
+            cell.get_text().set_fontweight(
+                "bold"
+            )
+
+    else:
+
+        ax.text(
+            0.55,
+            0.50,
+            "KEY STRIKE DATA N/A",
+            transform=ax.transAxes,
+            color="#9ca3af",
+            fontsize=9
+        )
 
     # ========================================================
     # FOOTER
@@ -4228,7 +4443,7 @@ def build_dashboard_image(
     # ========================================================
 
     fig.subplots_adjust(
-        left=0.055,
+        left=0.085,
         right=0.965,
         top=0.985,
         bottom=0.025
