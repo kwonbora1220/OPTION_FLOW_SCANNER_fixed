@@ -1,0 +1,5 @@
+# Existing dependencies used by the scanner
+numpy
+pandas
+yfinance
+matplotlib>=3.8,<4
