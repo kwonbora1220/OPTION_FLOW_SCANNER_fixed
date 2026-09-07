@@ -2890,7 +2890,6 @@ def build_report(
     return "\n".join(report)
 
 
-
 # ============================================================
 # DASHBOARD IMAGE
 # ============================================================
@@ -2979,6 +2978,95 @@ def _draw_card(ax, x, y, w, h, title, value, subtitle=""):
         )
 
 
+# ============================================================
+# BAR VALUE LABEL HELPER
+# ============================================================
+
+def _add_horizontal_bar_labels(
+    ax,
+    values,
+    side,
+    fontsize=7.5,
+    offset_ratio=0.012
+):
+    """
+    Add numeric labels to horizontal bars.
+
+    side:
+        "left"  -> values are plotted negative (PUT)
+        "right" -> values are plotted positive (CALL)
+
+    Example:
+        PUT  -125000  -> 125.0K shown to the left
+        CALL  850000  -> 850.0K shown to the right
+    """
+
+    values = np.asarray(
+        values,
+        dtype=float
+    )
+
+    finite_values = np.abs(
+        values[np.isfinite(values)]
+    )
+
+    if len(finite_values) == 0:
+        return
+
+    max_value = finite_values.max()
+
+    if not np.isfinite(max_value) or max_value <= 0:
+        return
+
+    offset = max_value * offset_ratio
+
+    for idx, value in enumerate(values):
+
+        if (
+            not np.isfinite(value)
+            or value <= 0
+        ):
+            continue
+
+        label = _dashboard_num(value)
+
+        if side == "left":
+
+            x = -value - offset
+
+            ax.text(
+                x,
+                idx,
+                label,
+                ha="right",
+                va="center",
+                fontsize=fontsize,
+                fontweight="bold",
+                color="white",
+                clip_on=False
+            )
+
+        else:
+
+            x = value + offset
+
+            ax.text(
+                x,
+                idx,
+                label,
+                ha="left",
+                va="center",
+                fontsize=fontsize,
+                fontweight="bold",
+                color="white",
+                clip_on=False
+            )
+
+
+# ============================================================
+# DASHBOARD IMAGE
+# ============================================================
+
 def build_dashboard_image(
     data,
     strike_table,
@@ -2993,84 +3081,230 @@ def build_dashboard_image(
     started
 ):
 
-    os.makedirs(output_dir, exist_ok=True)
+    os.makedirs(
+        output_dir,
+        exist_ok=True
+    )
 
-    calls = data[data["option_type"] == "CALL"]
-    puts = data[data["option_type"] == "PUT"]
+    calls = data[
+        data["option_type"] == "CALL"
+    ]
 
-    cv = calls["volume"].fillna(0).sum()
-    pv = puts["volume"].fillna(0).sum()
-    coi = calls["openInterest"].fillna(0).sum()
-    poi = puts["openInterest"].fillna(0).sum()
-    cp = calls["premium_proxy"].fillna(0).sum()
-    pp = puts["premium_proxy"].fillna(0).sum()
+    puts = data[
+        data["option_type"] == "PUT"
+    ]
+
+    cv = calls[
+        "volume"
+    ].fillna(0).sum()
+
+    pv = puts[
+        "volume"
+    ].fillna(0).sum()
+
+    coi = calls[
+        "openInterest"
+    ].fillna(0).sum()
+
+    poi = puts[
+        "openInterest"
+    ].fillna(0).sum()
+
+    cp = calls[
+        "premium_proxy"
+    ].fillna(0).sum()
+
+    pp = puts[
+        "premium_proxy"
+    ].fillna(0).sum()
 
     total_volume = cv + pv
     total_oi = coi + poi
     total_premium = cp + pp
 
-    cv_ratio = cv / total_volume * 100 if total_volume else np.nan
-    coi_ratio = coi / total_oi * 100 if total_oi else np.nan
-    cp_ratio = cp / total_premium * 100 if total_premium else np.nan
+    cv_ratio = (
+        cv / total_volume * 100
+        if total_volume
+        else np.nan
+    )
 
-    tgex = calls["gex"].sum(min_count=1)
-    pgex = puts["gex"].sum(min_count=1)
+    coi_ratio = (
+        coi / total_oi * 100
+        if total_oi
+        else np.nan
+    )
 
-    if np.isfinite(tgex) and np.isfinite(pgex):
+    cp_ratio = (
+        cp / total_premium * 100
+        if total_premium
+        else np.nan
+    )
+
+    tgex = calls[
+        "gex"
+    ].sum(
+        min_count=1
+    )
+
+    pgex = puts[
+        "gex"
+    ].sum(
+        min_count=1
+    )
+
+    if (
+        np.isfinite(tgex)
+        and np.isfinite(pgex)
+    ):
+
         net_gex = tgex + pgex
+
     elif np.isfinite(tgex):
+
         net_gex = tgex
+
     elif np.isfinite(pgex):
+
         net_gex = pgex
+
     else:
+
         net_gex = np.nan
 
     temp = data.copy()
-    temp["atm_distance"] = (temp["strike"] - spot).abs()
+
+    temp["atm_distance"] = (
+        temp["strike"] - spot
+    ).abs()
+
     atm_iv = (
-        temp.sort_values("atm_distance").head(10)["impliedVolatility"]
-        .dropna().mean()
+        temp
+        .sort_values("atm_distance")
+        .head(10)[
+            "impliedVolatility"
+        ]
+        .dropna()
+        .mean()
     )
 
-    call_wall = find_wall(strike_table, spot, "CALL")
-    put_wall = find_wall(strike_table, spot, "PUT")
+    call_wall = find_wall(
+        strike_table,
+        spot,
+        "CALL"
+    )
 
-    # Use the actually available strike range. This avoids hard-coding RKLB levels.
-    strikes = strike_table.sort_values("strike").copy()
+    put_wall = find_wall(
+        strike_table,
+        spot,
+        "PUT"
+    )
+
+    # ========================================================
+    # AVAILABLE STRIKE RANGE
+    # ========================================================
+
+    strikes = (
+        strike_table
+        .sort_values("strike")
+        .copy()
+    )
+
     strikes = strikes[
         (strikes["strike"] >= min_strike)
-        & (strikes["strike"] <= max_strike)
+        &
+        (strikes["strike"] <= max_strike)
     ].copy()
 
-    # Figure/table levels: use configured focus strikes that are actually present.
-    focus = [float(x) for x in FOCUS_STRIKES]
-    focus_present = [
-        x for x in focus
-        if ((strikes["strike"] - x).abs() < 0.001).any()
+    if strikes.empty:
+
+        raise RuntimeError(
+            "No strike data available "
+            "for dashboard."
+        )
+
+    # ========================================================
+    # FOCUS STRIKES
+    # ========================================================
+
+    focus = [
+        float(x)
+        for x in FOCUS_STRIKES
     ]
 
-    # Keep the dashboard compact for Telegram.
-    if len(strikes) > 31:
-        distances = (strikes["strike"] - spot).abs()
-        strikes = strikes.loc[distances.argsort()[:31]].sort_values("strike")
+    focus_present = [
+        x
+        for x in focus
+        if (
+            (
+                strikes["strike"] - x
+            ).abs() < 0.001
+        ).any()
+    ]
 
-    fig = plt.figure(figsize=(15, 20), facecolor="#0b0f14")
+    # ========================================================
+    # KEEP DASHBOARD COMPACT
+    # ========================================================
+
+    if len(strikes) > 31:
+
+        distances = (
+            strikes["strike"] - spot
+        ).abs()
+
+        nearest_index = (
+            distances
+            .sort_values()
+            .head(31)
+            .index
+        )
+
+        strikes = (
+            strikes
+            .loc[nearest_index]
+            .sort_values("strike")
+        )
+
+    # ========================================================
+    # FIGURE
+    # ========================================================
+
+    fig = plt.figure(
+        figsize=(15, 20),
+        facecolor="#0b0f14"
+    )
+
     gs = fig.add_gridspec(
         7,
         1,
-        height_ratios=[0.72, 0.82, 2.0, 2.0, 1.75, 2.25, 0.75],
+        height_ratios=[
+            0.72,
+            0.82,
+            2.0,
+            2.0,
+            1.75,
+            2.25,
+            0.75
+        ],
         hspace=0.34
     )
 
-    # --------------------------------------------------------
-    # Header + metric cards
-    # --------------------------------------------------------
-    ax = fig.add_subplot(gs[0])
-    ax.set_facecolor("#0b0f14")
+    # ========================================================
+    # HEADER
+    # ========================================================
+
+    ax = fig.add_subplot(
+        gs[0]
+    )
+
+    ax.set_facecolor(
+        "#0b0f14"
+    )
+
     ax.axis("off")
 
     ax.text(
-        0.02, 0.78,
+        0.02,
+        0.78,
         f"{symbol}  OPTION STRUCTURE DASHBOARD",
         transform=ax.transAxes,
         fontsize=22,
@@ -3079,19 +3313,41 @@ def build_dashboard_image(
     )
 
     ax.text(
-        0.02, 0.42,
-        f"Spot ${spot:.2f}   |   Strike ${min_strike:g}–${max_strike:g}   |   DTE 1–{max_dte}",
+        0.02,
+        0.42,
+        (
+            f"Spot ${spot:.2f}"
+            f"   |   "
+            f"Strike ${min_strike:g}–${max_strike:g}"
+            f"   |   "
+            f"DTE 1–{max_dte}"
+        ),
         transform=ax.transAxes,
         fontsize=10,
         color="#9ca3af"
     )
 
-    bias = "CALL DOMINANT" if cv > pv and coi > poi and cp > pp else (
-        "PUT DOMINANT" if pv > cv and poi > coi and pp > cp else "MIXED"
+    bias = (
+        "CALL DOMINANT"
+        if (
+            cv > pv
+            and coi > poi
+            and cp > pp
+        )
+        else (
+            "PUT DOMINANT"
+            if (
+                pv > cv
+                and poi > coi
+                and pp > cp
+            )
+            else "MIXED"
+        )
     )
 
     ax.text(
-        0.98, 0.65,
+        0.98,
+        0.65,
         bias,
         transform=ax.transAxes,
         fontsize=12,
@@ -3105,28 +3361,84 @@ def build_dashboard_image(
         )
     )
 
-    # --------------------------------------------------------
-    # Metric cards
-    # --------------------------------------------------------
-    ax = fig.add_subplot(gs[1])
-    ax.set_facecolor("#0b0f14")
+    # ========================================================
+    # METRIC CARDS
+    # ========================================================
+
+    ax = fig.add_subplot(
+        gs[1]
+    )
+
+    ax.set_facecolor(
+        "#0b0f14"
+    )
+
     ax.axis("off")
 
     cards = [
-        ("CALL VOL", _dashboard_num(cv), f"{cv_ratio:.1f}% of volume" if np.isfinite(cv_ratio) else "N/A"),
-        ("CALL OI", _dashboard_num(coi), f"{coi_ratio:.1f}% of OI" if np.isfinite(coi_ratio) else "N/A"),
-        ("CALL PREMIUM", _dashboard_money(cp), f"{cp_ratio:.1f}% of premium" if np.isfinite(cp_ratio) else "N/A"),
-        ("ATM IV", f"{atm_iv * 100:.1f}%" if np.isfinite(atm_iv) else "N/A", "nearest 10 contracts"),
-        ("NET GEX", _dashboard_money(net_gex), "OI-based proxy"),
+
+        (
+            "CALL VOL",
+            _dashboard_num(cv),
+            (
+                f"{cv_ratio:.1f}% of volume"
+                if np.isfinite(cv_ratio)
+                else "N/A"
+            )
+        ),
+
+        (
+            "CALL OI",
+            _dashboard_num(coi),
+            (
+                f"{coi_ratio:.1f}% of OI"
+                if np.isfinite(coi_ratio)
+                else "N/A"
+            )
+        ),
+
+        (
+            "CALL PREMIUM",
+            _dashboard_money(cp),
+            (
+                f"{cp_ratio:.1f}% of premium"
+                if np.isfinite(cp_ratio)
+                else "N/A"
+            )
+        ),
+
+        (
+            "ATM IV",
+            (
+                f"{atm_iv * 100:.1f}%"
+                if np.isfinite(atm_iv)
+                else "N/A"
+            ),
+            "nearest 10 contracts"
+        ),
+
+        (
+            "NET GEX",
+            _dashboard_money(net_gex),
+            "OI-based proxy"
+        )
+
     ]
 
     card_w = 0.184
     gap = 0.014
 
-    for i, (title, value, subtitle) in enumerate(cards):
+    for i, (
+        title,
+        value,
+        subtitle
+    ) in enumerate(cards):
+
         _draw_card(
             ax,
-            0.015 + i * (card_w + gap),
+            0.015 + i * (
+                card_w + gap
+            ),
             0.08,
             card_w,
             0.80,
@@ -3135,11 +3447,17 @@ def build_dashboard_image(
             subtitle
         )
 
-    # --------------------------------------------------------
-    # Price map: Put Wall / Spot / Call Wall
-    # --------------------------------------------------------
-    ax = fig.add_subplot(gs[2])
-    ax.set_facecolor("#0f141b")
+    # ========================================================
+    # PRICE MAP
+    # ========================================================
+
+    ax = fig.add_subplot(
+        gs[2]
+    )
+
+    ax.set_facecolor(
+        "#0f141b"
+    )
 
     ax.set_title(
         "PRICE MAP — KEY LEVELS",
@@ -3154,22 +3472,64 @@ def build_dashboard_image(
     high = max_strike
 
     if call_wall is not None:
-        high = max(high, float(call_wall["strike"]))
-    if put_wall is not None:
-        low = min(low, float(put_wall["strike"]))
 
-    span = max(high - low, 1)
+        high = max(
+            high,
+            float(
+                call_wall["strike"]
+            )
+        )
+
+    if put_wall is not None:
+
+        low = min(
+            low,
+            float(
+                put_wall["strike"]
+            )
+        )
+
+    span = max(
+        high - low,
+        1
+    )
+
     margin = span * 0.08
-    ax.set_xlim(low - margin, high + margin)
-    ax.set_ylim(-1, 1)
+
+    ax.set_xlim(
+        low - margin,
+        high + margin
+    )
+
+    ax.set_ylim(
+        -1,
+        1
+    )
+
     ax.set_yticks([])
 
-    ax.axhline(0, linewidth=2, alpha=0.35)
+    ax.axhline(
+        0,
+        linewidth=2,
+        alpha=0.35
+    )
 
-    for x in strikes["strike"].tolist():
-        ax.axvline(x, linewidth=0.7, alpha=0.12)
+    for x in strikes[
+        "strike"
+    ].tolist():
 
-    ax.axvline(spot, linewidth=3, alpha=0.95)
+        ax.axvline(
+            x,
+            linewidth=0.7,
+            alpha=0.12
+        )
+
+    ax.axvline(
+        spot,
+        linewidth=3,
+        alpha=0.95
+    )
+
     ax.text(
         spot,
         0.62,
@@ -3182,12 +3542,25 @@ def build_dashboard_image(
     )
 
     if put_wall is not None:
-        px = float(put_wall["strike"])
-        ax.axvline(px, linewidth=3, alpha=0.85)
+
+        px = float(
+            put_wall["strike"]
+        )
+
+        ax.axvline(
+            px,
+            linewidth=3,
+            alpha=0.85
+        )
+
         ax.text(
             px,
             -0.58,
-            f"PUT WALL\n${px:g}\nOI {_dashboard_num(put_wall['put_oi'])}",
+            (
+                f"PUT WALL\n"
+                f"${px:g}\n"
+                f"OI {_dashboard_num(put_wall['put_oi'])}"
+            ),
             ha="center",
             va="center",
             fontsize=9,
@@ -3195,12 +3568,25 @@ def build_dashboard_image(
         )
 
     if call_wall is not None:
-        cx = float(call_wall["strike"])
-        ax.axvline(cx, linewidth=3, alpha=0.85)
+
+        cx = float(
+            call_wall["strike"]
+        )
+
+        ax.axvline(
+            cx,
+            linewidth=3,
+            alpha=0.85
+        )
+
         ax.text(
             cx,
             0.02,
-            f"CALL WALL\n${cx:g}\nOI {_dashboard_num(call_wall['call_oi'])}",
+            (
+                f"CALL WALL\n"
+                f"${cx:g}\n"
+                f"OI {_dashboard_num(call_wall['call_oi'])}"
+            ),
             ha="center",
             va="center",
             fontsize=9,
@@ -3208,7 +3594,14 @@ def build_dashboard_image(
         )
 
     for x in focus_present:
-        ax.scatter([x], [-0.05], s=65, zorder=5)
+
+        ax.scatter(
+            [x],
+            [-0.05],
+            s=65,
+            zorder=5
+        )
+
         ax.text(
             x,
             -0.22,
@@ -3218,16 +3611,35 @@ def build_dashboard_image(
             fontsize=8
         )
 
-    ax.set_xticks(sorted(set([float(x) for x in strikes["strike"]])))
-    ax.tick_params(axis="x", labelsize=7)
+    ax.set_xticks(
+        sorted(
+            set(
+                float(x)
+                for x in strikes["strike"]
+            )
+        )
+    )
+
+    ax.tick_params(
+        axis="x",
+        labelsize=7
+    )
+
     for spine in ax.spines.values():
+
         spine.set_visible(False)
 
-    # --------------------------------------------------------
-    # OI structure
-    # --------------------------------------------------------
-    ax = fig.add_subplot(gs[3])
-    ax.set_facecolor("#0f141b")
+    # ========================================================
+    # OPEN INTEREST STRUCTURE
+    # ========================================================
+
+    ax = fig.add_subplot(
+        gs[3]
+    )
+
+    ax.set_facecolor(
+        "#0f141b"
+    )
 
     ax.set_title(
         "OPEN INTEREST BY STRIKE",
@@ -3238,29 +3650,172 @@ def build_dashboard_image(
         pad=12
     )
 
-    y = strikes["strike"].to_numpy(dtype=float)
-    c_oi = strikes["call_oi"].fillna(0).to_numpy(dtype=float)
-    p_oi = strikes["put_oi"].fillna(0).to_numpy(dtype=float)
-    bar_h = max(0.12, (np.nanmax(y) - np.nanmin(y)) / max(len(y), 1) * 0.62) if len(y) else 0.2
+    y = strikes[
+        "strike"
+    ].to_numpy(
+        dtype=float
+    )
 
-    ax.barh(y, -p_oi, height=bar_h, alpha=0.82, label="PUT OI")
-    ax.barh(y, c_oi, height=bar_h, alpha=0.82, label="CALL OI")
-    ax.axvline(0, linewidth=1.2)
-    ax.axhline(spot, linewidth=1.5, alpha=0.7)
+    c_oi = (
+        strikes[
+            "call_oi"
+        ]
+        .fillna(0)
+        .to_numpy(
+            dtype=float
+        )
+    )
 
-    ax.set_xlabel("PUT OI  ←                         →  CALL OI", color="#9ca3af")
-    ax.tick_params(axis="both", labelsize=8)
-    ax.legend(loc="upper right", frameon=False, ncol=2, fontsize=8)
-    ax.grid(axis="x", alpha=0.12)
+    p_oi = (
+        strikes[
+            "put_oi"
+        ]
+        .fillna(0)
+        .to_numpy(
+            dtype=float
+        )
+    )
+
+    if len(y):
+
+        y_range = (
+            np.nanmax(y)
+            -
+            np.nanmin(y)
+        )
+
+        bar_h = max(
+            0.12,
+            y_range
+            /
+            max(
+                len(y),
+                1
+            )
+            * 0.62
+        )
+
+    else:
+
+        bar_h = 0.2
+
+    # PUT = negative / left
+    ax.barh(
+        y,
+        -p_oi,
+        height=bar_h,
+        alpha=0.82,
+        label="PUT OI"
+    )
+
+    # CALL = positive / right
+    ax.barh(
+        y,
+        c_oi,
+        height=bar_h,
+        alpha=0.82,
+        label="CALL OI"
+    )
+
+    ax.axvline(
+        0,
+        linewidth=1.2
+    )
+
+    ax.axhline(
+        spot,
+        linewidth=1.5,
+        alpha=0.7
+    )
+
+    # ========================================================
+    # OI NUMERIC LABELS
+    # ========================================================
+
+    _add_horizontal_bar_labels(
+        ax,
+        p_oi,
+        side="left",
+        fontsize=7.5,
+        offset_ratio=0.012
+    )
+
+    _add_horizontal_bar_labels(
+        ax,
+        c_oi,
+        side="right",
+        fontsize=7.5,
+        offset_ratio=0.012
+    )
+
+    # ========================================================
+    # OI X RANGE
+    # ========================================================
+
+    oi_max = max(
+        np.nanmax(
+            p_oi
+        )
+        if len(p_oi)
+        else 0,
+        np.nanmax(
+            c_oi
+        )
+        if len(c_oi)
+        else 0
+    )
+
+    if (
+        np.isfinite(oi_max)
+        and oi_max > 0
+    ):
+
+        oi_margin = (
+            oi_max * 0.18
+        )
+
+        ax.set_xlim(
+            -oi_max - oi_margin,
+            oi_max + oi_margin
+        )
+
+    ax.set_xlabel(
+        "PUT OI  ←                         →  CALL OI",
+        color="#9ca3af"
+    )
+
+    ax.tick_params(
+        axis="both",
+        labelsize=8
+    )
+
+    ax.legend(
+        loc="upper right",
+        frameon=False,
+        ncol=2,
+        fontsize=8
+    )
+
+    ax.grid(
+        axis="x",
+        alpha=0.12
+    )
 
     for spine in ax.spines.values():
+
         spine.set_visible(False)
 
-    # --------------------------------------------------------
-    # Volume structure
-    # --------------------------------------------------------
-    ax = fig.add_subplot(gs[4])
-    ax.set_facecolor("#0f141b")
+    # ========================================================
+    # TODAY VOLUME STRUCTURE
+    # ========================================================
+
+    ax = fig.add_subplot(
+        gs[4]
+    )
+
+    ax.set_facecolor(
+        "#0f141b"
+    )
 
     ax.set_title(
         "TODAY VOLUME BY STRIKE",
@@ -3271,31 +3826,150 @@ def build_dashboard_image(
         pad=12
     )
 
-    c_vol = strikes["call_volume"].fillna(0).to_numpy(dtype=float)
-    p_vol = strikes["put_volume"].fillna(0).to_numpy(dtype=float)
+    c_vol = (
+        strikes[
+            "call_volume"
+        ]
+        .fillna(0)
+        .to_numpy(
+            dtype=float
+        )
+    )
 
-    ax.barh(y, -p_vol, height=bar_h, alpha=0.82, label="PUT VOL")
-    ax.barh(y, c_vol, height=bar_h, alpha=0.82, label="CALL VOL")
-    ax.axvline(0, linewidth=1.2)
-    ax.axhline(spot, linewidth=1.5, alpha=0.7)
+    p_vol = (
+        strikes[
+            "put_volume"
+        ]
+        .fillna(0)
+        .to_numpy(
+            dtype=float
+        )
+    )
 
-    ax.set_xlabel("PUT VOL  ←                         →  CALL VOL", color="#9ca3af")
-    ax.tick_params(axis="both", labelsize=8)
-    ax.legend(loc="upper right", frameon=False, ncol=2, fontsize=8)
-    ax.grid(axis="x", alpha=0.12)
+    # PUT = negative / left
+    ax.barh(
+        y,
+        -p_vol,
+        height=bar_h,
+        alpha=0.82,
+        label="PUT VOL"
+    )
+
+    # CALL = positive / right
+    ax.barh(
+        y,
+        c_vol,
+        height=bar_h,
+        alpha=0.82,
+        label="CALL VOL"
+    )
+
+    ax.axvline(
+        0,
+        linewidth=1.2
+    )
+
+    ax.axhline(
+        spot,
+        linewidth=1.5,
+        alpha=0.7
+    )
+
+    # ========================================================
+    # VOLUME NUMERIC LABELS
+    # ========================================================
+
+    _add_horizontal_bar_labels(
+        ax,
+        p_vol,
+        side="left",
+        fontsize=7.5,
+        offset_ratio=0.012
+    )
+
+    _add_horizontal_bar_labels(
+        ax,
+        c_vol,
+        side="right",
+        fontsize=7.5,
+        offset_ratio=0.012
+    )
+
+    # ========================================================
+    # VOLUME X RANGE
+    # ========================================================
+
+    vol_max = max(
+        np.nanmax(
+            p_vol
+        )
+        if len(p_vol)
+        else 0,
+        np.nanmax(
+            c_vol
+        )
+        if len(c_vol)
+        else 0
+    )
+
+    if (
+        np.isfinite(vol_max)
+        and vol_max > 0
+    ):
+
+        vol_margin = (
+            vol_max * 0.18
+        )
+
+        ax.set_xlim(
+            -vol_max - vol_margin,
+            vol_max + vol_margin
+        )
+
+    ax.set_xlabel(
+        "PUT VOL  ←                         →  CALL VOL",
+        color="#9ca3af"
+    )
+
+    ax.tick_params(
+        axis="both",
+        labelsize=8
+    )
+
+    ax.legend(
+        loc="upper right",
+        frameon=False,
+        ncol=2,
+        fontsize=8
+    )
+
+    ax.grid(
+        axis="x",
+        alpha=0.12
+    )
 
     for spine in ax.spines.values():
+
         spine.set_visible(False)
 
-    # --------------------------------------------------------
-    # Expiration concentration + key strike table
-    # --------------------------------------------------------
-    ax = fig.add_subplot(gs[5])
-    ax.set_facecolor("#0f141b")
+    # ========================================================
+    # EXPIRATION CONCENTRATION
+    # + KEY STRIKE SUMMARY
+    # ========================================================
+
+    ax = fig.add_subplot(
+        gs[5]
+    )
+
+    ax.set_facecolor(
+        "#0f141b"
+    )
+
     ax.axis("off")
 
     ax.text(
-        0.01, 0.96,
+        0.01,
+        0.96,
         "EXPIRATION OI CONCENTRATION",
         transform=ax.transAxes,
         color="white",
@@ -3304,31 +3978,128 @@ def build_dashboard_image(
         va="top"
     )
 
-    exp = expiration_structure.copy()
+    exp = (
+        expiration_structure.copy()
+    )
 
     if not exp.empty:
-        exp = exp.sort_values("total_oi", ascending=False).head(7).copy()
-        labels = exp["expiration"].astype(str).tolist()
-        vals = exp["total_oi"].fillna(0).to_numpy(dtype=float)
-        conc = exp["total_oi_concentration_pct"].fillna(0).to_numpy(dtype=float)
 
-        exp_ax = ax.inset_axes([0.01, 0.08, 0.47, 0.76])
-        exp_ax.set_facecolor("#0f141b")
-        yy = np.arange(len(labels))
-        exp_ax.barh(yy, vals, alpha=0.85)
-        exp_ax.set_yticks(yy)
-        exp_ax.set_yticklabels(labels, fontsize=7)
+        exp = (
+            exp
+            .sort_values(
+                "total_oi",
+                ascending=False
+            )
+            .head(7)
+            .copy()
+        )
+
+        labels = (
+            exp[
+                "expiration"
+            ]
+            .astype(str)
+            .tolist()
+        )
+
+        vals = (
+            exp[
+                "total_oi"
+            ]
+            .fillna(0)
+            .to_numpy(
+                dtype=float
+            )
+        )
+
+        conc = (
+            exp[
+                "total_oi_concentration_pct"
+            ]
+            .fillna(0)
+            .to_numpy(
+                dtype=float
+            )
+        )
+
+        exp_ax = ax.inset_axes(
+            [
+                0.01,
+                0.08,
+                0.47,
+                0.76
+            ]
+        )
+
+        exp_ax.set_facecolor(
+            "#0f141b"
+        )
+
+        yy = np.arange(
+            len(labels)
+        )
+
+        exp_ax.barh(
+            yy,
+            vals,
+            alpha=0.85
+        )
+
+        exp_ax.set_yticks(
+            yy
+        )
+
+        exp_ax.set_yticklabels(
+            labels,
+            fontsize=7
+        )
+
         exp_ax.invert_yaxis()
-        exp_ax.tick_params(axis="x", labelsize=7)
-        exp_ax.grid(axis="x", alpha=0.12)
+
+        exp_ax.tick_params(
+            axis="x",
+            labelsize=7
+        )
+
+        exp_ax.grid(
+            axis="x",
+            alpha=0.12
+        )
+
         for spine in exp_ax.spines.values():
+
             spine.set_visible(False)
 
-        for idx, (v, c) in enumerate(zip(vals, conc)):
-            exp_ax.text(v, idx, f"  {_dashboard_num(v)} ({c:.1f}%)", va="center", fontsize=7)
+        for idx, (
+            v,
+            c
+        ) in enumerate(
+            zip(
+                vals,
+                conc
+            )
+        ):
+
+            exp_ax.text(
+                v,
+                idx,
+                (
+                    f"  "
+                    f"{_dashboard_num(v)}"
+                    f" ({c:.1f}%)"
+                ),
+                va="center",
+                fontsize=7,
+                clip_on=False
+            )
+
+    # ========================================================
+    # KEY STRIKE SUMMARY
+    # ========================================================
 
     ax.text(
-        0.53, 0.96,
+        0.53,
+        0.96,
         "KEY STRIKE SUMMARY",
         transform=ax.transAxes,
         color="white",
@@ -3338,50 +4109,132 @@ def build_dashboard_image(
     )
 
     if not key_strike_summary.empty:
-        rows = []
-        for _, row in key_strike_summary.iterrows():
-            rows.append([
-                f"${row['strike']:g}",
-                _dashboard_num(row["total_oi"]),
-                _dashboard_num(row["call_oi"]),
-                _dashboard_num(row["put_oi"]),
-                str(row["top_expiration"]),
-                f"{safe_float(row['top_expiration_oi_pct']):.1f}%"
-            ])
 
-        table_ax = ax.inset_axes([0.53, 0.05, 0.46, 0.82])
-        table_ax.axis("off")
+        rows = []
+
+        for _, row in (
+            key_strike_summary
+            .iterrows()
+        ):
+
+            rows.append(
+                [
+                    f"${row['strike']:g}",
+
+                    _dashboard_num(
+                        row["total_oi"]
+                    ),
+
+                    _dashboard_num(
+                        row["call_oi"]
+                    ),
+
+                    _dashboard_num(
+                        row["put_oi"]
+                    ),
+
+                    str(
+                        row[
+                            "top_expiration"
+                        ]
+                    ),
+
+                    f"{safe_float(row['top_expiration_oi_pct']):.1f}%"
+                ]
+            )
+
+        table_ax = ax.inset_axes(
+            [
+                0.53,
+                0.05,
+                0.46,
+                0.82
+            ]
+        )
+
+        table_ax.axis(
+            "off"
+        )
+
         table = table_ax.table(
             cellText=rows,
-            colLabels=["STRIKE", "TOTAL OI", "CALL", "PUT", "TOP EXP", "%"],
+            colLabels=[
+                "STRIKE",
+                "TOTAL OI",
+                "CALL",
+                "PUT",
+                "TOP EXP",
+                "%"
+            ],
             loc="center",
             cellLoc="center"
         )
-        table.auto_set_font_size(False)
-        table.set_fontsize(7.5)
-        table.scale(1, 1.55)
 
-        for cell in table.get_celld().values():
-            cell.set_edgecolor("#394150")
-            cell.set_facecolor("#171b23")
-            cell.get_text().set_color("white")
+        table.auto_set_font_size(
+            False
+        )
 
-    # --------------------------------------------------------
-    # Footer / interpretation
-    # --------------------------------------------------------
-    ax = fig.add_subplot(gs[6])
-    ax.set_facecolor("#0b0f14")
+        table.set_fontsize(
+            7.5
+        )
+
+        table.scale(
+            1,
+            1.55
+        )
+
+        for cell in (
+            table.get_celld().values()
+        ):
+
+            cell.set_edgecolor(
+                "#394150"
+            )
+
+            cell.set_facecolor(
+                "#171b23"
+            )
+
+            cell.get_text().set_color(
+                "white"
+            )
+
+    # ========================================================
+    # FOOTER
+    # ========================================================
+
+    ax = fig.add_subplot(
+        gs[6]
+    )
+
+    ax.set_facecolor(
+        "#0b0f14"
+    )
+
     ax.axis("off")
 
     wall_text = []
+
     if put_wall is not None:
-        wall_text.append(f"Put Wall ${float(put_wall['strike']):g}")
+
+        wall_text.append(
+            f"Put Wall ${float(put_wall['strike']):g}"
+        )
+
     if call_wall is not None:
-        wall_text.append(f"Call Wall ${float(call_wall['strike']):g}")
+
+        wall_text.append(
+            f"Call Wall ${float(call_wall['strike']):g}"
+        )
 
     ax.text(
-        0.02, 0.62,
-        "  |  ".join(wall_text) if wall_text else "Walls N/A",
+        0.02,
+        0.62,
+        (
+            "  |  ".join(wall_text)
+            if wall_text
+            else "Walls N/A"
+        ),
         transform=ax.transAxes,
         fontsize=10,
         fontweight="bold",
@@ -3389,40 +4242,76 @@ def build_dashboard_image(
     )
 
     ax.text(
-        0.02, 0.20,
-        "OI = existing open interest snapshot | Premium = trading-value proxy | GEX = OI-based proxy | Buy/Sell direction cannot be confirmed",
+        0.02,
+        0.20,
+        (
+            "OI = existing open interest snapshot "
+            "| Premium = trading-value proxy "
+            "| GEX = OI-based proxy "
+            "| Buy/Sell direction cannot be confirmed"
+        ),
         transform=ax.transAxes,
         fontsize=7.5,
         color="#6b7280"
     )
 
     ax.text(
-        0.98, 0.20,
-        started.strftime("%Y-%m-%d %H:%M UTC"),
+        0.98,
+        0.20,
+        started.strftime(
+            "%Y-%m-%d %H:%M UTC"
+        ),
         transform=ax.transAxes,
         fontsize=7.5,
         color="#6b7280",
         ha="right"
     )
 
-    fig.subplots_adjust(left=0.055, right=0.965, top=0.985, bottom=0.025)
+    # ========================================================
+    # LAYOUT
+    # ========================================================
 
-    path = os.path.join(output_dir, "option_dashboard.png")
+    fig.subplots_adjust(
+        left=0.055,
+        right=0.965,
+        top=0.985,
+        bottom=0.025
+    )
+
+    # ========================================================
+    # SAVE
+    # ========================================================
+
+    path = os.path.join(
+        output_dir,
+        "option_dashboard.png"
+    )
+
     fig.savefig(
         path,
         dpi=150,
         facecolor=fig.get_facecolor(),
         bbox_inches="tight"
     )
+
     plt.close(fig)
 
-    if not os.path.isfile(path) or os.path.getsize(path) == 0:
-        raise RuntimeError("Dashboard image was not created.")
+    if (
+        not os.path.isfile(path)
+        or os.path.getsize(path) == 0
+    ):
 
-    print(f"🖼️ option_dashboard.png ({os.path.getsize(path):,} bytes)")
+        raise RuntimeError(
+            "Dashboard image was not created."
+        )
+
+    print(
+        f"🖼️ option_dashboard.png "
+        f"({os.path.getsize(path):,} bytes)"
+    )
 
     return path
-
+    
 
 # ============================================================
 # TELEGRAM
