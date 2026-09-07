@@ -9,7 +9,7 @@ on:
   # UTC 12:00
 
   schedule:
-    - cron: "0 12 * * *"
+    - cron: "0 10 * * *"
 
 
 permissions:
