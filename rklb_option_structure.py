@@ -2890,7 +2890,6 @@ def _draw_card(
             va="center"
         )
 
-
 # ============================================================
 # BAR VALUE LABEL HELPER
 # ============================================================
@@ -2929,10 +2928,6 @@ def _add_horizontal_bar_labels(
         dtype=float
     )
 
-    # --------------------------------------------------------
-    # SAFETY CHECK
-    # --------------------------------------------------------
-
     if len(y_positions) != len(values):
         return
 
@@ -2953,15 +2948,10 @@ def _add_horizontal_bar_labels(
     ):
         return
 
-    offset = (
-        max_value
-        * offset_ratio
+    offset = max(
+        max_value * offset_ratio,
+        0.5
     )
-
-    # --------------------------------------------------------
-    # IMPORTANT:
-    # Use actual y_pos instead of enumerate(idx)
-    # --------------------------------------------------------
 
     for y_pos, value in zip(
         y_positions,
@@ -2993,7 +2983,7 @@ def _add_horizontal_bar_labels(
                 fontweight="bold",
                 color="white",
                 clip_on=False,
-                zorder=10
+                zorder=20
             )
 
         else:
@@ -3010,7 +3000,7 @@ def _add_horizontal_bar_labels(
                 fontweight="bold",
                 color="white",
                 clip_on=False,
-                zorder=10
+                zorder=20
             )
 
 
