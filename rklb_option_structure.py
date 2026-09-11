@@ -66,9 +66,9 @@ OUTPUT_DIR = os.getenv(
 FOCUS_STRIKES = [
     35,
     20,
-    18,
+    10,
     15,
-    29.7,
+    18,
     12
     
 ]
